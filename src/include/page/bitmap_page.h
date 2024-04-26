@@ -18,7 +18,7 @@ class BitmapPage {
    * @param page_offset Index in extent of the page allocated.
    * @return true if successfully allocate a page.
    */
-  bool AllocatePage(uint32_t &page_offset);
+  bool AllocatePage(uint32_t &page_offset, bool flag = false);
 
   /**
    * @return true if successfully de-allocate a page.
@@ -30,6 +30,10 @@ class BitmapPage {
    */
   bool IsPageFree(uint32_t page_offset) const;
 
+ unsigned char getb(uint32_t byte) {
+  return this->bytes[byte];
+ }
+
  private:
   /**
    * check a bit(byte_index, bit_index) in bytes is free(value 0).
@@ -39,6 +43,22 @@ class BitmapPage {
    * @return true if a bit is 0, false if 1.
    */
   bool IsPageFreeLow(uint32_t byte_index, uint8_t bit_index) const;
+
+  /**
+   * update next_free_page_
+   */
+  void FindNextFreePage();
+
+  /**
+   * set a bit(byte_index, bit_index) in bytes to 1.
+   *
+   * @param byte_index value of page_offset / 8
+   * @param bit_index value of page_offset % 8
+   */
+  void SetPageTakenLow(uint32_t byte_index, uint8_t bit_index);
+
+
+
 
   /** Note: need to update if modify page structure. */
   static constexpr size_t MAX_CHARS = PageSize - 2 * sizeof(uint32_t);

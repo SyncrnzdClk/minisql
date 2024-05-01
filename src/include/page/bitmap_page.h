@@ -18,7 +18,7 @@ class BitmapPage {
    * @param page_offset Index in extent of the page allocated.
    * @return true if successfully allocate a page.
    */
-  bool AllocatePage(uint32_t &page_offset, bool flag = false);
+  bool AllocatePage(uint32_t &page_offset);
 
   /**
    * @return true if successfully de-allocate a page.

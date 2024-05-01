@@ -6,7 +6,7 @@
  * TODO: Student Implement
  */
 template <size_t PageSize>
-bool BitmapPage<PageSize>::AllocatePage(uint32_t &page_offset, bool flag) {
+bool BitmapPage<PageSize>::AllocatePage(uint32_t &page_offset) {
   // check if the page is full
   if (this->page_allocated_ >= MAX_CHARS * 8) return false;
 

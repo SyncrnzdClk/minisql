@@ -52,8 +52,6 @@ void DiskManager::WritePage(page_id_t logical_page_id, const char *page_data) {
  */
 page_id_t DiskManager::AllocatePage() {
   DiskFileMetaPage* meta = reinterpret_cast<DiskFileMetaPage*>(meta_data_);
-
-
   
   page_id_t physical_bitmap_page_id = INVALID_PAGE_ID, physical_data_page_id = INVALID_PAGE_ID;
   // find free page_id
@@ -96,9 +94,6 @@ page_id_t DiskManager::AllocatePage() {
   // update the meta page
   meta->num_allocated_pages_++;
   page_id_t logical_page_id = physical_data_page_id - (physical_data_page_id - 1) / (BITMAP_SIZE + 1) - 2; // map physical page id to logical page id
-  // LOG(INFO) << "meta->num_allocated_pages = " << meta->num_allocated_pages_;
-  // LOG(INFO) << "meta->num_extents = " << meta->num_extents_;
-  // LOG(INFO) << "physical_bitmap_page_id = " << physical_bitmap_page_id << " bitmap_page_offset = " << bitmap_page_offset;
   return logical_page_id;
 }
 
@@ -107,7 +102,6 @@ page_id_t DiskManager::AllocatePage() {
  */
 void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
   if (IsPageFree(logical_page_id)) {
-    LOG(INFO) << "heer";
     return;
   }
   else {
@@ -122,7 +116,6 @@ void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
     bitmap->DeAllocatePage(bitmap_page_offset);
 
     WritePhysicalPage(physical_bitmap_page_id, reinterpret_cast<char*>(bitmap));
-    LOG(INFO) << "ispagefree(logical) = " << IsPageFree(logical_page_id);
     // update the meta page
     meta->num_allocated_pages_--;
     meta->extent_used_page_[bitmap_extent_offset]--;

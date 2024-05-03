@@ -35,6 +35,8 @@ class LRUReplacer : public Replacer {
 
   size_t Size() override;
 
+  size_t TotalSize() override;
+
 private:
   // add your own private member variables here
   list <frame_id_t> replaceList;

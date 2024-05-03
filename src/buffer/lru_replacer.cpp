@@ -16,6 +16,7 @@ bool LRUReplacer::Victim(frame_id_t *frame_id) {
   if (this->Size() == 0) return false;
   else {
     *frame_id = replaceList.front();
+    irreplaceList.push_back(*frame_id);
     replaceList.remove(replaceList.front());
   }
   return true;
@@ -48,4 +49,9 @@ void LRUReplacer::Unpin(frame_id_t frame_id) {
  */
 size_t LRUReplacer::Size() {
   return replaceList.size();
+}
+
+// used for debug
+size_t LRUReplacer::TotalSize() {
+  return replaceList.size() + irreplaceList.size();
 }

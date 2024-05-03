@@ -18,7 +18,7 @@ class BufferPoolManager {
 
   ~BufferPoolManager();
 
-  Page *FetchPage(page_id_t page_id);
+  Page *FetchPage(page_id_t page_id, bool flag = false);
 
   bool UnpinPage(page_id_t page_id, bool is_dirty);
 

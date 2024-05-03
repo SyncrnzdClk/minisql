@@ -44,7 +44,6 @@ TEST(BufferPoolManagerTest, BinaryDataTest) {
     EXPECT_NE(nullptr, bpm->NewPage(page_id_temp));
     EXPECT_EQ(i, page_id_temp);
   }
-
   // Scenario: Once the buffer pool is full, we should not be able to create any new pages.
   for (size_t i = buffer_pool_size; i < buffer_pool_size * 2; ++i) {
     EXPECT_EQ(nullptr, bpm->NewPage(page_id_temp));
@@ -58,10 +57,11 @@ TEST(BufferPoolManagerTest, BinaryDataTest) {
   for (int i = 0; i < 5; ++i) {
     EXPECT_NE(nullptr, bpm->NewPage(page_id_temp));
     EXPECT_EQ(buffer_pool_size + i, page_id_temp);
-    bpm->UnpinPage(page_id_temp, false);
+    EXPECT_EQ(true, bpm->UnpinPage(page_id_temp, false));
   }
+  cout << "here" << endl;
   // Scenario: We should be able to fetch the data we wrote a while ago.
-  page0 = bpm->FetchPage(0);
+  page0 = bpm->FetchPage(0, true);
   EXPECT_EQ(0, memcmp(page0->GetData(), random_binary_data, PAGE_SIZE));
   EXPECT_EQ(true, bpm->UnpinPage(0, true));
 

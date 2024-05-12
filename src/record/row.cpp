@@ -14,7 +14,6 @@ uint32_t Row::SerializeTo(char *buf, Schema *schema) const {
   ASSERT(schema != nullptr, "Invalid schema before serialize.");
   ASSERT(schema->GetColumnCount() == fields_.size(), "Fields size do not match schema's column size.");
   uint32_t serializeSize = 0;
-   
   for (auto field : fields_) {
     field->SerializeTo(buf+serializeSize);
     serializeSize += field->GetSerializedSize();

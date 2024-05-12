@@ -5,10 +5,9 @@
  */
 bool TableHeap::InsertTuple(Row &row, Txn *txn) { 
   page_id_t curPageId = first_page_id_;
-  
   auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(curPageId));
   if (page == nullptr) return false; // the buffer pool is full currently
-  
+
   while (page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_) != true) {
     buffer_pool_manager_->UnpinPage(curPageId, false);
     curPageId = page->GetNextPageId();
@@ -133,9 +132,21 @@ void TableHeap::DeleteTable(page_id_t page_id) {
 /**
  * TODO: Student Implement
  */
-TableIterator TableHeap::Begin(Txn *txn) { return TableIterator(nullptr, RowId(), nullptr); }
+TableIterator TableHeap::Begin(Txn *txn) {
+  if (first_page_id_ == INVALID_PAGE_ID) return TableIterator(nullptr, RowId(INVALID_ROWID), nullptr); // if there wasn't any page, just return a ending iterator
+
+  auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(GetFirstPageId())); // get the first page of the tableheap
+  RowId iteratorRowId;
+  while (!page->GetFirstTupleRid(&iteratorRowId)) { // search the table heap until we find the first row or reach the end of the table heap
+    buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+    if (page->GetNextPageId() != INVALID_PAGE_ID) page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(page->GetNextPageId())); 
+    else return TableIterator(nullptr, RowId(INVALID_ROWID), nullptr); // reach the end of the table heap
+  }
+  buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+  return TableIterator(this, iteratorRowId, txn); 
+}
 
 /**
  * TODO: Student Implement
  */
-TableIterator TableHeap::End() { return TableIterator(nullptr, RowId(), nullptr); }
+TableIterator TableHeap::End() { return TableIterator(nullptr, RowId(INVALID_ROWID), nullptr); }

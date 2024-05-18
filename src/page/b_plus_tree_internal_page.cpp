@@ -19,6 +19,12 @@
  * max page size
  */
 void InternalPage::Init(page_id_t page_id, page_id_t parent_id, int key_size, int max_size) {
+  SetPageType(IndexPageType::INTERNAL_PAGE);
+  SetMaxSize(max_size);
+  SetSize(0);
+  SetKeySize(key_size);
+  SetParentPageId(parent_id);
+  SetPageId(page_id);
 }
 /*
  * Helper method to get/set the key associated with input "index"(a.k.a
@@ -65,7 +71,21 @@ void InternalPage::PairCopy(void *dest, void *src, int pair_num) {
  * 用了二分查找
  */
 page_id_t InternalPage::Lookup(const GenericKey *key, const KeyManager &KM) {
-  return INVALID_PAGE_ID;
+  int start = 1, mid, end = GetSize()-1;
+  while (start <= end) {
+    mid = (start + end) / 2;
+    if (KM.CompareKeys(key, KeyAt(mid)) == -1) {
+      end = mid - 1;
+    }
+    else if (KM.CompareKeys(key, KeyAt(mid)) == 1) {
+      start = mid + 1;
+    }
+    else {
+      return ValueAt(mid);
+    }
+  }
+
+  return ValueAt(end);
 }
 
 /*****************************************************************************
@@ -78,6 +98,9 @@ page_id_t InternalPage::Lookup(const GenericKey *key, const KeyManager &KM) {
  * NOTE: This method is only called within InsertIntoParent()(b_plus_tree.cpp)
  */
 void InternalPage::PopulateNewRoot(const page_id_t &old_value, GenericKey *new_key, const page_id_t &new_value) {
+  SetValueAt(0, old_value);
+  SetValueAt(1, new_value);
+  SetKeyAt(1, new_key);
 }
 
 /*
@@ -86,7 +109,19 @@ void InternalPage::PopulateNewRoot(const page_id_t &old_value, GenericKey *new_k
  * @return:  new size after insertion
  */
 int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_key, const page_id_t &new_value) {
-  return 0;
+  for (int i = 0; i < GetSize(); i++) { // iterate through the page to find the old value (old page id)
+    if (ValueAt(i) == old_value) {
+      SetSize(GetSize()+1);
+      // insert the new key value pair into the data array
+      for (int j = GetSize(); j > i; j--) {
+        SetKeyAt(j, KeyAt(j-1));
+        SetValueAt(j, ValueAt(j-1));
+      }
+      SetKeyAt(i, new_key);
+      SetValueAt(i, new_value);
+    }
+  }
+  return GetSize();
 }
 
 /*****************************************************************************
@@ -97,6 +132,7 @@ int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_ke
  * buffer_pool_manager 是干嘛的？传给CopyNFrom()用于Fetch数据页
  */
 void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer_pool_manager) {
+  
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.

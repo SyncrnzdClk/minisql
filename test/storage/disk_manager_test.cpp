@@ -3,6 +3,7 @@
 #include <unordered_set>
 
 #include "gtest/gtest.h"
+#include "glog/logging.h"
 
 TEST(DiskManagerTest, BitMapPageTest) {
   const size_t size = 512;

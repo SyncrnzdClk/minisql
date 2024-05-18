@@ -8,6 +8,7 @@
 #include "record/field.h"
 #include "record/schema.h"
 #include "utils/utils.h"
+#include "glog/logging.h"
 
 static string db_file_name = "table_heap_test.db";
 using Fields = std::vector<Field>;
@@ -15,6 +16,7 @@ using Fields = std::vector<Field>;
 TEST(TableHeapTest, TableHeapSampleTest) {
   // init testing instance
   auto disk_mgr_ = new DiskManager(db_file_name);
+  // remove(db_file_name.c_str());return;
   auto bpm_ = new BufferPoolManager(DEFAULT_BUFFER_POOL_SIZE, disk_mgr_);
   const int row_nums = 10000;
   // create schema

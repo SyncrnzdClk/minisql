@@ -5,7 +5,7 @@
 #include <string>
 
 #include "gtest/gtest.h"
-
+#include "glog/logging.h"
 TEST(BufferPoolManagerTest, BinaryDataTest) {
   const std::string db_name = "bpm_test.db";
   const size_t buffer_pool_size = 10;
@@ -20,6 +20,7 @@ TEST(BufferPoolManagerTest, BinaryDataTest) {
 
   page_id_t page_id_temp;
   auto *page0 = bpm->NewPage(page_id_temp);
+  LOG(INFO) << page_id_temp;
 
   // Scenario: The buffer pool is empty. We should be able to create a new page.
   ASSERT_NE(nullptr, page0);

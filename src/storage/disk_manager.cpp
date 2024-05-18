@@ -52,7 +52,6 @@ void DiskManager::WritePage(page_id_t logical_page_id, const char *page_data) {
  */
 page_id_t DiskManager::AllocatePage() {
   DiskFileMetaPage* meta = reinterpret_cast<DiskFileMetaPage*>(meta_data_);
-  
   page_id_t physical_bitmap_page_id = INVALID_PAGE_ID, physical_data_page_id = INVALID_PAGE_ID;
   // find free page_id
   for (uint32_t extent_index = 0; extent_index < meta->GetExtentNums(); extent_index++) {
@@ -83,14 +82,12 @@ page_id_t DiskManager::AllocatePage() {
   uint32_t bitmap_page_offset;
   if (bitmap->AllocatePage(bitmap_page_offset) == false) LOG(INFO) << "FALSE!!!!!!! " << " meta->num_allocated_pages = " << meta->num_allocated_pages_ + 1 << " FALSE!!!!!";
 
-
   // rewrite the bitmap page
   WritePhysicalPage(physical_bitmap_page_id, reinterpret_cast<char*>(bitmap));
 
   // calculate the physical page id of the data page
   physical_data_page_id = physical_bitmap_page_id + bitmap_page_offset + 1;
 
-  
   // update the meta page
   meta->num_allocated_pages_++;
   page_id_t logical_page_id = physical_data_page_id - (physical_data_page_id - 1) / (BITMAP_SIZE + 1) - 2; // map physical page id to logical page id

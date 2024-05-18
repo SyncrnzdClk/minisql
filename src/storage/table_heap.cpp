@@ -1,4 +1,5 @@
 #include "storage/table_heap.h"
+#include "glog/logging.h"
 
 /**
  * TODO: Student Implement
@@ -16,8 +17,9 @@ bool TableHeap::InsertTuple(Row &row, Txn *txn) {
     }
     else { // if there are no more pages left, create a new page
       TablePage* newTablePage = reinterpret_cast<TablePage *>(buffer_pool_manager_->NewPage(curPageId));
-      if (curPageId = INVALID_PAGE_ID) return false; // if there are no more free pages, return false
+      if (curPageId == INVALID_PAGE_ID) return false; // if there are no more free pages, return false
       newTablePage->Init(curPageId, page->GetPageId(), log_manager_, txn);
+      newTablePage->SetNextPageId(INVALID_PAGE_ID);
 
       // insert the tuple into the new page
       newTablePage->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
@@ -49,7 +51,7 @@ bool TableHeap::MarkDelete(const RowId &rid, Txn *txn) {
 /**
  * TODO: Student Implement
  */
-bool TableHeap::UpdateTuple(const Row &row, const RowId &rid, Txn *txn) { 
+bool TableHeap::UpdateTuple(Row &row, const RowId &rid, Txn *txn) { 
 
   auto page = reinterpret_cast<TablePage *> (buffer_pool_manager_->FetchPage(rid.GetPageId())); // fetch the page that contains the row
   if (page == nullptr) return false; // if the buffer pool manager is full, return false

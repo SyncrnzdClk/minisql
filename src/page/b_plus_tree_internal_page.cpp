@@ -132,7 +132,6 @@ int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_ke
  * buffer_pool_manager 是干嘛的？传给CopyNFrom()用于Fetch数据页
  */
 void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer_pool_manager) {
-  
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -152,6 +151,11 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
  * NOTE: store key&value pair continuously after deletion
  */
 void InternalPage::Remove(int index) {
+  for (int i = index; i < GetSize()-1; i++) {
+    SetValueAt(i, ValueAt(i+1));
+    SetKeyAt(i, KeyAt(i+1));
+  }
+  SetSize(GetSize()-1);
 }
 
 /*
@@ -159,7 +163,9 @@ void InternalPage::Remove(int index) {
  * NOTE: only call this method within AdjustRoot()(in b_plus_tree.cpp)
  */
 page_id_t InternalPage::RemoveAndReturnOnlyChild() {
-  return 0;
+  page_id_t returnPageId = ValueAt(0);
+  SetSize(0);
+  return returnPageId;
 }
 
 /*****************************************************************************
@@ -173,6 +179,7 @@ page_id_t InternalPage::RemoveAndReturnOnlyChild() {
  * pages that are moved to the recipient
  */
 void InternalPage::MoveAllTo(InternalPage *recipient, GenericKey *middle_key, BufferPoolManager *buffer_pool_manager) {
+
 }
 
 /*****************************************************************************

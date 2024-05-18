@@ -21,7 +21,15 @@
  * next page id and set max size
  * 未初始化next_page_id
  */
-void LeafPage::Init(page_id_t page_id, page_id_t parent_id, int key_size, int max_size) {}
+void LeafPage::Init(page_id_t page_id, page_id_t parent_id, int key_size, int max_size) {
+  SetPageId(page_id);
+  SetParentPageId(parent_id);
+  SetKeySize(key_size);
+  SetMaxSize(max_size);
+  SetSize(0);
+  SetPageType(IndexPageType::LEAF_PAGE);
+  SetNextPageId(INVALID_PAGE_ID);
+}
 
 /**
  * Helper methods to set/get next page id
@@ -46,7 +54,20 @@ void LeafPage::SetNextPageId(page_id_t next_page_id) {
  * 二分查找
  */
 int LeafPage::KeyIndex(const GenericKey *key, const KeyManager &KM) {
-  return 0;
+  int start = 1, mid, end = GetSize()-1;
+  while (start <= end) {
+    mid = (start + end) / 2;
+    if (KM.CompareKeys(key, KeyAt(mid)) == -1) {
+      end = mid - 1;
+    }
+    else if (KM.CompareKeys(key, KeyAt(mid)) == 1) {
+      start = mid + 1;
+    }
+    else {
+      return mid;
+    }
+  }
+  return end + 1;
 }
 
 /*
@@ -90,7 +111,30 @@ std::pair<GenericKey *, RowId> LeafPage::GetItem(int index) { return {KeyAt(inde
  * @return page size after insertion
  */
 int LeafPage::Insert(GenericKey *key, const RowId &value, const KeyManager &KM) {
-  return 0;
+  int start = 1, mid, end = GetSize() - 1;
+  // find the place to insert the pair
+  while (start <= end) {
+    mid = (start + end) / 2;
+    if (KM.CompareKeys(key, KeyAt(mid)) == -1) {
+      end = mid - 1;
+    }
+    else if (KM.CompareKeys(key, KeyAt(mid)) == 1) {
+      start = mid + 1;
+    }
+    else {
+      SetValueAt(mid, value);
+      return GetSize();
+    }
+  }
+  // insert the new pair
+  for (int i = GetSize(); i > end + 1; i--) {
+    SetKeyAt(i, KeyAt(i-1));
+    SetValueAt(i, ValueAt(i-1));
+  }
+  SetKeyAt(end + 1, key);
+  SetValueAt(end + 1, value);
+  SetSize(GetSize() + 1);
+  return GetSize();
 }
 
 /*****************************************************************************
@@ -117,6 +161,21 @@ void LeafPage::CopyNFrom(void *src, int size) {
  * If the key does not exist, then return false
  */
 bool LeafPage::Lookup(const GenericKey *key, RowId &value, const KeyManager &KM) {
+  int start = 1, mid, end = GetSize() - 1;
+  // find the place of the key
+  while (start <= end) {
+    mid = (start + end) / 2;
+    if (KM.CompareKeys(key, KeyAt(mid)) == -1) {
+      end = mid - 1;
+    }
+    else if (KM.CompareKeys(key, KeyAt(mid)) == 1) {
+      start = mid + 1;
+    }
+    else {
+      value = ValueAt(mid);
+      return true;
+    }
+  }
   return false;
 }
 
@@ -130,6 +189,27 @@ bool LeafPage::Lookup(const GenericKey *key, RowId &value, const KeyManager &KM)
  * @return  page size after deletion
  */
 int LeafPage::RemoveAndDeleteRecord(const GenericKey *key, const KeyManager &KM) {
+  int start = 1, mid, end = GetSize() - 1;
+  // find the place of the key
+  while (start <= end) {
+    mid = (start + end) / 2;
+    if (KM.CompareKeys(key, KeyAt(mid)) == -1) {
+      end = mid - 1;
+    }
+    else if (KM.CompareKeys(key, KeyAt(mid)) == 1) {
+      start = mid + 1;
+    }
+    else {
+      // perform deletion
+      for (int i = mid; i < GetSize()-1; i++) {
+        SetValueAt(i, ValueAt(i+1));
+        SetKeyAt(i, KeyAt(i+1));
+      }
+      // return page size after deletion
+      SetSize(GetSize()-1);
+      return GetSize();
+    }
+  }
   return -1;
 }
 
@@ -157,6 +237,10 @@ void LeafPage::MoveFirstToEndOf(LeafPage *recipient) {
  * Copy the item into the end of my item list. (Append item to my array)
  */
 void LeafPage::CopyLastFrom(GenericKey *key, const RowId value) {
+  int size = GetSize();
+  SetKeyAt(size, key);
+  SetValueAt(size, value);
+  SetSize(size + 1);
 }
 
 /*
@@ -170,4 +254,12 @@ void LeafPage::MoveLastToFrontOf(LeafPage *recipient) {
  *
  */
 void LeafPage::CopyFirstFrom(GenericKey *key, const RowId value) {
+  int size = GetSize();
+  for (int i = size; i > 0; i--) {
+    SetKeyAt(i, KeyAt(i-1));
+    SetValueAt(i, ValueAt(i-1));
+  }
+  SetSize(size + 1);
+  SetKeyAt(0, key);
+  SetValueAt(0, value);
 }

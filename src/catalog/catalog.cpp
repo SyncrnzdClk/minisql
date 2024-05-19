@@ -147,7 +147,32 @@ CatalogManager::~CatalogManager() {
  */
 dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schema, Txn *txn, TableInfo *&table_info) {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+  
+  // first check whether the table is already exist
+  if (table_names_.find(table_name) != table_names_.end()) return DB_TABLE_ALREADY_EXIST;
+  
+  // for every table, we will assign a new page to manage it
+  page_id_t page_id; 
+  
+  // if there isn't enough page, return DB_FAILED
+  Page* table_meta_page = buffer_pool_manager_->NewPage(page_id);
+  if (table_meta_page == nullptr) return DB_FAILED;
+
+  // create a new table heap
+  table_id_t table_id = next_table_id_++;
+  TableHeap* table_heap = TableHeap::Create(buffer_pool_manager_, schema, txn, nullptr, nullptr);
+  TableMetadata* table_meta = TableMetadata::Create(table_id, table_name, table_heap->GetFirstPageId(), schema);
+  
+  // serialize the table_meta into the table_meta_page
+  table_meta->SerializeTo(table_meta_page->GetData());
+  buffer_pool_manager_->UnpinPage(table_meta_page->GetPageId(), true);
+  table_info->Init(table_meta, table_heap);
+
+  // update the information in catalog manager
+  table_names_.emplace(table_name, table_id);
+  tables_.emplace(table_id, table_info);
+  
+  return DB_SUCCESS;
 }
 
 /**

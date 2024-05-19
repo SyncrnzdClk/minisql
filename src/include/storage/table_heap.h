@@ -113,10 +113,16 @@ class TableHeap {
         schema_(schema),
         log_manager_(log_manager),
         lock_manager_(lock_manager) {
-        buffer_pool_manager->NewPage(first_page_id_);
-        TablePage *page = reinterpret_cast<TablePage *>(this->buffer_pool_manager_->FetchPage(first_page_id_));
+        // assign a new page for table heap (as its first page)
+        TablePage *page = reinterpret_cast<TablePage *>(buffer_pool_manager->NewPage(first_page_id_));
+        // make sure there is enough page
+        ASSERT(page != nullptr, "There isn't enough page");
+        // initialize the page
         page->Init(first_page_id_, INVALID_PAGE_ID, log_manager,txn);
         page->SetNextPageId(INVALID_PAGE_ID);
+
+        // after initializing (becomes dirty), unpin it
+        buffer_pool_manager->UnpinPage(first_page_id_, true);
     // ASSERT(false, "Not implemented yet.");
   };
 

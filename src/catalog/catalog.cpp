@@ -67,6 +67,67 @@ CatalogMeta::CatalogMeta() {}
 CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManager *lock_manager,
                                LogManager *log_manager, bool init)
     : buffer_pool_manager_(buffer_pool_manager), lock_manager_(lock_manager), log_manager_(log_manager) {
+  if (init) {
+    catalog_meta_ = CatalogMeta::NewInstance();
+  }
+  else {
+    // fetch the catalog page from the memory and deserialize the data
+    auto page = buffer_pool_manager->FetchPage(CATALOG_META_PAGE_ID);
+    catalog_meta_ = CatalogMeta::DeserializeFrom(page->GetData());
+    next_table_id_ = catalog_meta_->GetNextTableId();
+    next_index_id_ = catalog_meta_->GetNextIndexId();
+    
+    // set the data about table
+    for (auto it = catalog_meta_->table_meta_pages_.begin(); it != catalog_meta_->table_meta_pages_.end(); it++) {
+      
+      // fetch the page that contains the data about the table, and deserialize the data into table_meta
+      auto tablePage = buffer_pool_manager->FetchPage(it->second);
+      TableInfo* table_info = TableInfo::Create();
+      // here we create a table_meta first (with invalid contents, just to allocate memory), and then deserialize the data into it
+      TableMetadata* table_meta = TableMetadata::Create(it->first, "", INVALID_PAGE_ID, nullptr);
+      TableMetadata::DeserializeFrom(tablePage->GetData(), table_meta);
+      
+      TableHeap* table_heap = TableHeap::Create(buffer_pool_manager, table_meta->GetFirstPageId(), table_meta->GetSchema(), log_manager, lock_manager);
+      table_info->Init(table_meta, table_heap);
+      buffer_pool_manager->UnpinPage(it->second, false);
+
+      // set the data about the table in the catalog manager
+      table_names_.emplace(table_meta->GetTableName(), table_meta->GetTableId());
+      tables_.emplace(table_meta->GetTableName(), table_info);
+
+    }
+
+    // set the data about the index
+    for (auto it = catalog_meta_->index_meta_pages_.begin(); it != catalog_meta_->index_meta_pages_.end(); it++) {
+      // fetch the page that contains the data about the index, and deserialize the data into index_meta
+      auto indexPage = buffer_pool_manager->FetchPage(it->second);
+      IndexInfo* index_info = IndexInfo::Create();
+      // here we create a new index_meta (with invalid contents, just to allocate memory) and then deserialize the date into it
+      IndexMetadata* index_meta = IndexMetadata::Create(it->first, "", -1, vector<uint32_t>());
+      IndexMetadata::DeserializeFrom(indexPage->GetData(), index_meta);
+      
+      // initialize the index_info
+      ASSERT(tables_.find(index_meta->GetTableId()) != tables_.end(), "the table does not exist");      
+      TableInfo* table_info = tables_.find(index_meta->GetTableId())->second;
+      index_info->Init(index_meta, table_info, buffer_pool_manager);
+      buffer_pool_manager->UnpinPage(it->second, false);
+      
+      // set the map for indexes: table_name->index_name->indexes
+      // first we check whether this index belongs to some table which is already in the map
+      auto index_name_map_it = index_names_.find(table_info->GetTableName());
+      if (index_name_map_it == index_names_.end()) { // if the table is not in the index_name map, insert a new <table, map<index_name, index_id>> into it 
+        unordered_map<std::string, index_id_t> index_name_id_map;
+        index_name_id_map.emplace(index_meta->GetIndexName(), index_meta->GetIndexId());
+        index_names_.emplace(table_info->GetTableName(), index_name_id_map);
+      }
+      else { // if the table is already in the index_name map, insert the pair <index_name, index_id> into the map in the second position
+        index_name_map_it->second.emplace(index_meta->GetIndexName(), index_meta->GetIndexId());
+      }
+      indexes_.emplace(index_meta->GetIndexId(), index_info);
+    }
+    buffer_pool_manager->UnpinPage(CATALOG_META_PAGE_ID, false);
+    
+  }
 //    ASSERT(false, "Not Implemented yet");
 }
 

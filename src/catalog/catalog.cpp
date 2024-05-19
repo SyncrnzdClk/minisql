@@ -1,4 +1,5 @@
 #include "catalog/catalog.h"
+#include "common/macros.h"
 
 void CatalogMeta::SerializeTo(char *buf) const {
   ASSERT(GetSerializedSize() <= PAGE_SIZE, "Failed to serialize catalog metadata to disk.");
@@ -180,7 +181,17 @@ dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schem
  */
 dberr_t CatalogManager::GetTable(const string &table_name, TableInfo *&table_info) {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+
+  // first find the table id in the table_names
+  auto it_table_name = table_names_.find(table_name);
+  // if there wasn't such a table, return table_not_exist 
+  if (it_table_name == table_names_.end()) return DB_TABLE_NOT_EXIST;
+
+  // normally if the table name exists in table_names_, the table info should exist in tables_
+  ASSERT(tables_.find(it_table_name->second) != tables_.end(), "unexpected error");
+  table_info = tables_.find(it_table_name->second)->second;
+
+  return DB_SUCCESS;
 }
 
 /**
@@ -188,7 +199,16 @@ dberr_t CatalogManager::GetTable(const string &table_name, TableInfo *&table_inf
  */
 dberr_t CatalogManager::GetTables(vector<TableInfo *> &tables) const {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+  
+  if (tables_.size() == 0) return DB_TABLE_NOT_EXIST;
+
+  ASSERT(tables_.size() == table_names_.size(), "unexpected error");
+  // iterate through the whole tables_ to get all the tables
+  for (auto it = tables_.begin(); it != tables_.end(); it++) {
+    // push the table info to the back of the tables
+    tables.push_back(it->second);
+  }
+  return DB_SUCCESS;
 }
 
 /**
@@ -263,5 +283,10 @@ dberr_t CatalogManager::LoadIndex(const index_id_t index_id, const page_id_t pag
  */
 dberr_t CatalogManager::GetTable(const table_id_t table_id, TableInfo *&table_info) {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+
+  auto it = tables_.find(table_id);
+  if (it != tables_.end()) return DB_TABLE_NOT_EXIST;
+  table_info = it->second;
+
+  return DB_SUCCESS;
 }

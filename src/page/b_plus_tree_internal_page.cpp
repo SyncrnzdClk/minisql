@@ -152,8 +152,9 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
   PairCopy(pairs_off + start_index * pair_size, src, size);
 
   // reset the parent page_id of the pages that have been copied to the current internal page
+  // notice that here we cast the page to type bplustreepage but not bplustreeinternalpage because it could be a leaf page
   for (int i = 0; i < size; i++) {
-    auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(ValueAt(start_index)));
+    auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(ValueAt(start_index))->GetData());
     page->SetParentPageId(GetPageId());
     buffer_pool_manager->UnpinPage(page->GetPageId(), true);
   }
@@ -198,7 +199,9 @@ page_id_t InternalPage::RemoveAndReturnOnlyChild() {
  * pages that are moved to the recipient
  */
 void InternalPage::MoveAllTo(InternalPage *recipient, GenericKey *middle_key, BufferPoolManager *buffer_pool_manager) {
-  
+  SetKeyAt(0, middle_key); // set the invalid key as the middle key
+  recipient->CopyNFrom(pairs_off, GetSize(), buffer_pool_manager);
+  SetSize(0);
 }
 
 /*****************************************************************************
@@ -214,6 +217,13 @@ void InternalPage::MoveAllTo(InternalPage *recipient, GenericKey *middle_key, Bu
  */
 void InternalPage::MoveFirstToEndOf(InternalPage *recipient, GenericKey *middle_key,
                                     BufferPoolManager *buffer_pool_manager) {
+  recipient->CopyLastFrom(middle_key, ValueAt(0), buffer_pool_manager);
+  // move the following contents forwawrd to make sure they are continuously stored
+  for (int i = 0; i < GetSize()-1; i++) {
+    if (i != 0) SetKeyAt(i, KeyAt(i+1));
+    SetValueAt(i, ValueAt(i+1));
+  }
+  SetSize(GetSize()-1);
 }
 
 /* Append an entry at the end.
@@ -221,6 +231,16 @@ void InternalPage::MoveFirstToEndOf(InternalPage *recipient, GenericKey *middle_
  * So I need to 'adopt' it by changing its parent page id, which needs to be persisted with BufferPoolManger
  */
 void InternalPage::CopyLastFrom(GenericKey *key, const page_id_t value, BufferPoolManager *buffer_pool_manager) {
+  int end_index = GetSize(); // get the index to put the new pair in
+  // insert the new pair into the page
+  SetValueAt(end_index, value);
+  SetKeyAt(end_index, key);
+
+  // update the inserted page's parent id
+  auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(value)->GetData());
+  page->SetParentPageId(GetPageId());
+
+  SetSize(end_index + 1);
 }
 
 /*
@@ -232,6 +252,16 @@ void InternalPage::CopyLastFrom(GenericKey *key, const page_id_t value, BufferPo
  */
 void InternalPage::MoveLastToFrontOf(InternalPage *recipient, GenericKey *middle_key,
                                      BufferPoolManager *buffer_pool_manager) {
+  int end_index = GetSize()-1;
+  recipient->CopyFirstFrom(ValueAt(end_index), buffer_pool_manager);
+  // updating the recipient's array, move every key backward
+  for (int i = recipient->GetSize(); i > 0; i--) {
+    if (i != 1) recipient->SetKeyAt(i, KeyAt(i-1));
+  }
+  // insert the middle key into the recipient's array
+  recipient->SetKeyAt(1, middle_key);
+  
+  SetSize(end_index);
 }
 
 /* Append an entry at the beginning.
@@ -239,4 +269,17 @@ void InternalPage::MoveLastToFrontOf(InternalPage *recipient, GenericKey *middle
  * So I need to 'adopt' it by changing its parent page id, which needs to be persisted with BufferPoolManger
  */
 void InternalPage::CopyFirstFrom(const page_id_t value, BufferPoolManager *buffer_pool_manager) {
+  // move the values backward to leave space for the first inserted value
+  for (int i = GetSize(); i > 0; i--) {
+    SetValueAt(i, ValueAt(i-1));
+  }
+  // insert the moved page
+  SetValueAt(0, value);
+
+  // reset the page's parent page id
+  auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(value)->GetData());
+  page->SetParentPageId(GetPageId());
+  buffer_pool_manager->UnpinPage(value, true);
+  
+  SetSize(GetSize()+1);
 }

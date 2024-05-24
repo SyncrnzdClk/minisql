@@ -237,6 +237,15 @@ void LeafPage::MoveAllTo(LeafPage *recipient) {
  *
  */
 void LeafPage::MoveFirstToEndOf(LeafPage *recipient) {
+  recipient->CopyLastFrom(KeyAt(0), ValueAt(0));
+  
+  // move the contents forward to make sure they are continuously stored
+  for (int i = 0; i < GetSize()-1; i++) {
+    SetKeyAt(i, KeyAt(i+1));
+    SetValueAt(i, ValueAt(i-1));
+  }
+
+  SetSize(GetSize()-1);
 }
 
 /*
@@ -253,6 +262,9 @@ void LeafPage::CopyLastFrom(GenericKey *key, const RowId value) {
  * Remove the last key & value pair from this page to "recipient" page.
  */
 void LeafPage::MoveLastToFrontOf(LeafPage *recipient) {
+  int end_index = GetSize()-1;
+  recipient->CopyFirstFrom(KeyAt(end_index), ValueAt(end_index));
+  SetSize(end_index);
 }
 
 /*

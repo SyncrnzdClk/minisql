@@ -132,9 +132,11 @@ int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_ke
  * buffer_pool_manager 是干嘛的？传给CopyNFrom()用于Fetch数据页
  */
 void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer_pool_manager) {
+  // note that i'm not sure whether i have to  manage this page in this process like the pages that are copied to the recipient page(change parent id)
+  // i guess i'll do this in some other fucntions
   int mid_index = GetSize() / 2;
   recipient->CopyNFrom(pairs_off + mid_index * pair_size, GetSize() - mid_index, buffer_pool_manager);
-  SetSize(mid_index-1);
+  SetSize(mid_index);
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -155,6 +157,8 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
     page->SetParentPageId(GetPageId());
     buffer_pool_manager->UnpinPage(page->GetPageId(), true);
   }
+
+  SetSize(start_index + size);
 }
 
 /*****************************************************************************

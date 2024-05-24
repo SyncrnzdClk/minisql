@@ -132,6 +132,9 @@ int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_ke
  * buffer_pool_manager 是干嘛的？传给CopyNFrom()用于Fetch数据页
  */
 void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer_pool_manager) {
+  int mid_index = GetSize() / 2;
+  recipient->CopyNFrom(pairs_off + mid_index * pair_size, GetSize() - mid_index, buffer_pool_manager);
+  SetSize(mid_index-1);
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -140,6 +143,18 @@ void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer
  *
  */
 void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool_manager) {
+  // get the start index of the page
+  int start_index = GetSize();
+
+  // copy the pairs into the page
+  PairCopy(pairs_off + start_index * pair_size, src, size);
+
+  // reset the parent page_id of the pages that have been copied to the current internal page
+  for (int i = 0; i < size; i++) {
+    auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(ValueAt(start_index)));
+    page->SetParentPageId(GetPageId());
+    buffer_pool_manager->UnpinPage(page->GetPageId(), true);
+  }
 }
 
 /*****************************************************************************
@@ -179,7 +194,7 @@ page_id_t InternalPage::RemoveAndReturnOnlyChild() {
  * pages that are moved to the recipient
  */
 void InternalPage::MoveAllTo(InternalPage *recipient, GenericKey *middle_key, BufferPoolManager *buffer_pool_manager) {
-
+  
 }
 
 /*****************************************************************************

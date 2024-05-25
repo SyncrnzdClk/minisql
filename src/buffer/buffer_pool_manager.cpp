@@ -153,7 +153,7 @@ bool BufferPoolManager::DeletePage(page_id_t page_id) {
   // find the page
   // auto it = std::find(page_table_.begin(), page_table_.end(), page_id); 
   frame_id_t frame_id;
-  if (page_table_.count(page_id) < 0) { // if P does not exist, return true
+  if (page_table_.count(page_id) <= 0) { // if P does not exist, return true
     DeallocatePage(page_id);
     return true;
   }

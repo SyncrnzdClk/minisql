@@ -239,6 +239,7 @@ void InternalPage::CopyLastFrom(GenericKey *key, const page_id_t value, BufferPo
   // update the inserted page's parent id
   auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(value)->GetData());
   page->SetParentPageId(GetPageId());
+  buffer_pool_manager->UnpinPage(GetPageId(), true);
 
   SetSize(end_index + 1);
 }

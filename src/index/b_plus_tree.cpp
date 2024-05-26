@@ -146,7 +146,30 @@ void BPlusTree::StartNewTree(GenericKey *key, const RowId &value) {
  * @return: since we only support unique key, if user try to insert duplicate
  * keys return false, otherwise return true.
  */
-bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transaction) { return false; }
+bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transaction) {
+  Page* leaf_to_be_inserted = FindLeafPage(key, root_page_id_);
+  BPlusTreeLeafPage* bplus_leaf_to_be_inserted = reinterpret_cast<BPlusTreeLeafPage *>(leaf_to_be_inserted->GetData());
+  RowId temp;
+  if (bplus_leaf_to_be_inserted->Lookup(key, temp, processor_)) { // if the key exist in the leaf, return immediately
+    return false;
+  }
+  else { // insert the entry
+    int size;
+    size = bplus_leaf_to_be_inserted->Insert(key, value, processor_);
+    if (size > leaf_max_size_) {
+      // if the size after insertion exceeds the max size, perform split
+      BPlusTreeLeafPage* split_page = Split(bplus_leaf_to_be_inserted, transaction);
+      buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
+      buffer_pool_manager_->UnpinPage(split_page->GetPageId(), true);
+      InsertIntoParent(bplus_leaf_to_be_inserted, split_page->KeyAt(0), split_page);
+      return true;
+    }
+    buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
+    return true;
+
+  }
+  
+}
 
 /*
  * Split input page and return newly created page.
@@ -155,9 +178,30 @@ bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transac
  * an "out of memory" exception if returned value is nullptr), then move half
  * of key & value pairs from input page to newly created page
  */
-BPlusTreeInternalPage *BPlusTree::Split(InternalPage *node, Txn *transaction) { return nullptr; }
+BPlusTreeInternalPage *BPlusTree::Split(InternalPage *node, Txn *transaction) {
+  page_id_t split_page_id;
+  // allocate a new page for the splited page
+  auto split_page = buffer_pool_manager_->NewPage(split_page_id);
+  if (split_page == nullptr) {
+    throw std::runtime_error("out of memory");
+  }
+  auto bplus_split_page = reinterpret_cast<BPlusTreeInternalPage *>(split_page->GetData());
+  bplus_split_page->Init(split_page_id, node->GetParentPageId(), processor_.GetKeySize(), internal_max_size_);
+  node->MoveHalfTo(bplus_split_page, buffer_pool_manager_);
+}
 
-BPlusTreeLeafPage *BPlusTree::Split(LeafPage *node, Txn *transaction) { return nullptr; }
+BPlusTreeLeafPage *BPlusTree::Split(LeafPage *node, Txn *transaction) {
+  page_id_t split_page_id;
+  // alocate a new page for the splited page, and notice here we do not unpin it (we'll do it in the function that call this)
+  auto split_page = buffer_pool_manager_->NewPage(split_page_id);
+  if (split_page == nullptr) {
+    throw std::runtime_error("out of memory");
+  }
+  auto bplus_split_page = reinterpret_cast<BPlusTreeLeafPage *>(split_page->GetData());
+  bplus_split_page->Init(split_page_id, node->GetParentPageId(), processor_.GetKeySize(), leaf_max_size_);
+  node->MoveHalfTo(bplus_split_page);
+  return bplus_split_page;
+}
 
 /*
  * Insert key & value pair into internal page after split
@@ -168,7 +212,56 @@ BPlusTreeLeafPage *BPlusTree::Split(LeafPage *node, Txn *transaction) { return n
  * adjusted to take info of new_node into account. Remember to deal with split
  * recursively if necessary.
  */
-void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlusTreePage *new_node, Txn *transaction) {}
+void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlusTreePage *new_node, Txn *transaction) {
+  if (old_node->IsRootPage()) { // if the old node is the root, populate a new root
+  page_id_t new_root_page_id;
+    auto new_root_page = buffer_pool_manager_->NewPage(new_root_page_id);
+    // if there are not enough pages to allocate a new root page
+    if (new_root_page == nullptr) {
+      throw std::runtime_error("out of memory");
+    }
+    auto bplus_new_root_page = reinterpret_cast<BPlusTreeInternalPage *>(new_root_page->GetData());
+    // initialize the page as a new root page 
+    bplus_new_root_page->Init(new_root_page_id, INVALID_PAGE_ID, processor_.GetKeySize(), internal_max_size_);
+    
+    // fetch the pages that match the old node and new node first (because we are going to update them)
+    // 这里其实有点勉强，因为在进入者一层调用之前我们已经unpin了这些pages
+    // 但是接下来来要修改他们的parent page id，然后又要unpin，所以这里fetch相当于重新pin一下
+    buffer_pool_manager_->FetchPage(old_node->GetPageId());
+    buffer_pool_manager_->FetchPage(new_node->GetPageId());
+
+    // update the old_node's and new_node's parent page id
+    old_node->SetParentPageId(new_root_page_id);
+    new_node->SetParentPageId(new_root_page_id);
+    
+    // update the root page id stored in the IndexRootsPage
+    auto index_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
+    index_page->Update(index_id_, new_root_page_id);
+    buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
+
+    bplus_new_root_page->PopulateNewRoot(old_node->GetPageId(), key, new_node->GetPageId());
+    buffer_pool_manager_->UnpinPage(old_node->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(new_node->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(new_root_page->GetPageId(), true);
+    return ;
+  }
+  else {
+    auto parent_page = buffer_pool_manager_->FetchPage(old_node->GetParentPageId());
+    auto bplus_parent_page = reinterpret_cast<BPlusTreeInternalPage *>(parent_page->GetData());
+    bplus_parent_page->InsertNodeAfter(old_node->GetPageId(), key, new_node->GetPageId());
+    // if the size of the page after insertion exceeds the max size, recursively perform split
+    if (bplus_parent_page->GetSize() < internal_max_size_) {
+      auto bplus_split_page = Split(bplus_parent_page, transaction);\
+      // unpin the page that has been updated
+      buffer_pool_manager_->UnpinPage(bplus_parent_page->GetPageId(), true);
+      buffer_pool_manager_->UnpinPage(bplus_split_page->GetPageId(), true);
+      // recursively insert into its parent
+      InsertIntoParent(bplus_parent_page, bplus_split_page->KeyAt(0), bplus_split_page);
+      return ;
+    }
+    buffer_pool_manager_->UnpinPage(bplus_parent_page->GetPageId(), true);
+  }
+}
 
 /*****************************************************************************
  * REMOVE

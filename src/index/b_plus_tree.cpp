@@ -162,6 +162,9 @@ bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transac
       buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
       buffer_pool_manager_->UnpinPage(split_page->GetPageId(), true);
       InsertIntoParent(bplus_leaf_to_be_inserted, split_page->KeyAt(0), split_page);
+      // update the next page id of the leaf nodes
+      split_page->SetNextPageId(bplus_leaf_to_be_inserted->GetNextPageId());
+      bplus_leaf_to_be_inserted->SetNextPageId(split_page->GetPageId());
       return true;
     }
     buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
@@ -239,6 +242,7 @@ void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlus
     index_page->Update(index_id_, new_root_page_id);
     buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
 
+    // update the new root's contents, and then unpin those pages, notice here the new root will not split
     bplus_new_root_page->PopulateNewRoot(old_node->GetPageId(), key, new_node->GetPageId());
     buffer_pool_manager_->UnpinPage(old_node->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(new_node->GetPageId(), true);
@@ -273,7 +277,26 @@ void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlus
  * delete entry from leaf page. Remember to deal with redistribute or merge if
  * necessary.
  */
-void BPlusTree::Remove(const GenericKey *key, Txn *transaction) {}
+void BPlusTree::Remove(const GenericKey *key, Txn *transaction) {
+  if(IsEmpty()) { // if the current tree is empty, return immediately
+    return;
+  }
+  
+  auto leaf_page = FindLeafPage(key, root_page_id_);
+  auto bplus_leaf_page = reinterpret_cast<BPlusTreeLeafPage *>(leaf_page->GetData());
+  // if there isn't such a record to be removed, unpin the clean page
+  if (bplus_leaf_page->RemoveAndDeleteRecord(key, processor_) == -1) buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), false);
+  
+  // if the size is invalid, amend it
+  if (bplus_leaf_page->GetSize() < bplus_leaf_page->GetMinSize()) {
+    // if merge/coalesce happens, delete the page
+    if (CoalesceOrRedistribute(bplus_leaf_page, transaction)) buffer_pool_manager_->DeletePage(leaf_page->GetPageId());
+    // else buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), true);
+  }
+  else { // unpin the dirty page
+    buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), true);
+  }
+}
 
 /* todo
  * User needs to first find the sibling of input page. If sibling's size + input
@@ -282,8 +305,40 @@ void BPlusTree::Remove(const GenericKey *key, Txn *transaction) {}
  * @return: true means target leaf page should be deleted, false means no
  * deletion happens
  */
-template <typename N>
-bool BPlusTree::CoalesceOrRedistribute(N *&node, Txn *transaction) {
+// template <typename N>
+bool BPlusTree::CoalesceOrRedistribute(BPlusTreeLeafPage *&node, Txn *transaction) {
+  ASSERT(node->GetParentPageId() != INVALID_PAGE_ID, "root is empty"); // make sure removing records won't empty the root
+  // find the parent node of the current node
+  auto parent_page = buffer_pool_manager_->FetchPage(node->GetParentPageId());
+  auto bplus_parent_page = reinterpret_cast<BPlusTreeInternalPage *>(parent_page->GetData());
+  // find the sibling of the current node
+  page_id_t sib_page_id;
+  // find the sibling's index
+  int index = bplus_parent_page->ValueIndex(node->GetPageId());
+  if (index == 0) { // if the current node is the first child 
+    sib_page_id = bplus_parent_page->ValueAt(index+1);
+  }
+  else { // if the current node is not the first child, i'll just consider the pre node as its sibling for the sake of convenience
+    sib_page_id = bplus_parent_page->ValueAt(index-1);
+  }
+  auto sib_page = buffer_pool_manager_->FetchPage(sib_page_id);
+  auto bplus_sib_page = reinterpret_cast<BPlusTreeLeafPage *>(sib_page->GetData());
+  
+  // first check whether we can merge the current page with its sibling
+  if (bplus_sib_page->GetSize() + node->GetSize() <= node->GetMaxSize()) { // merge two nodes
+    if (Coalesce(bplus_sib_page, node, bplus_parent_page, index, transaction)) { // if recursive deletion happens, delete the parent page
+      buffer_pool_manager_->DeletePage(parent_page->GetPageId());
+    }
+    buffer_pool_manager_->UnpinPage(node->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(sib_page_id, true);
+    return true;
+  }
+  else { // redistribute
+    Redistribute(bplus_sib_page, node, index);
+    buffer_pool_manager_->UnpinPage(node->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(sib_page_id, true);
+    return false;
+  }
   return false;
 }
 
@@ -300,6 +355,7 @@ bool BPlusTree::CoalesceOrRedistribute(N *&node, Txn *transaction) {
  */
 bool BPlusTree::Coalesce(LeafPage *&neighbor_node, LeafPage *&node, InternalPage *&parent, int index,
                          Txn *transaction) {
+
   return false;
 }
 
@@ -401,6 +457,7 @@ Page *BPlusTree::FindLeafPage(const GenericKey *key, page_id_t page_id, bool lef
  * updating it.
  */
 void BPlusTree::UpdateRootPageId(int insert_record) {
+  // 服了为什么这个函数放在最后，我前面写的时候没看到，直接手动更新了。
 }
 
 /**

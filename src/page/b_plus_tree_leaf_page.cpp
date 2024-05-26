@@ -147,6 +147,7 @@ void LeafPage::MoveHalfTo(LeafPage *recipient) {
   int mid_index = GetSize() / 2;
   recipient->CopyNFrom(pairs_off + mid_index * pair_size, GetSize() - mid_index);
   SetSize(mid_index);
+  // notice here we update the next page id in the insert process in b_plus_tree.cpp
 }
 
 /*

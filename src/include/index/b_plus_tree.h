@@ -78,8 +78,8 @@ class BPlusTree {
 
   InternalPage *Split(InternalPage *node, Txn *transaction);
 
-  // template <typename N>
-  bool CoalesceOrRedistribute(BPlusTreeLeafPage *&node, Txn *transaction = nullptr);
+  template <typename N>
+  bool CoalesceOrRedistribute(N *&node, Txn *transaction = nullptr);
 
   bool Coalesce(InternalPage *&neighbor_node, InternalPage *&node, InternalPage *&parent, int index,
                 Txn *transaction = nullptr);

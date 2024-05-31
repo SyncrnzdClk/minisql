@@ -94,7 +94,7 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
 
       // set the data about the table in the catalog manager
       table_names_.emplace(table_meta->GetTableName(), table_meta->GetTableId());
-      tables_.emplace(table_meta->GetTableName(), table_info);
+      tables_.emplace(table_meta->GetTableId(), table_info);
 
     }
 

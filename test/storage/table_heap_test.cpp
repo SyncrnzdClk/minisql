@@ -15,6 +15,7 @@ using Fields = std::vector<Field>;
 
 TEST(TableHeapTest, TableHeapSampleTest) {
   // init testing instance
+  remove(db_file_name.c_str());
   auto disk_mgr_ = new DiskManager(db_file_name);
   // remove(db_file_name.c_str());return;
   auto bpm_ = new BufferPoolManager(DEFAULT_BUFFER_POOL_SIZE, disk_mgr_);

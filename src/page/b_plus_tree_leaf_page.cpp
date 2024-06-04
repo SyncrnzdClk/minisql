@@ -54,7 +54,7 @@ void LeafPage::SetNextPageId(page_id_t next_page_id) {
  * 二分查找
  */
 int LeafPage::KeyIndex(const GenericKey *key, const KeyManager &KM) {
-  int start = 1, mid, end = GetSize()-1;
+  int start = 0, mid, end = GetSize()-1;
   while (start <= end) {
     mid = (start + end) / 2;
     if (KM.CompareKeys(key, KeyAt(mid)) == -1) {
@@ -111,7 +111,7 @@ std::pair<GenericKey *, RowId> LeafPage::GetItem(int index) { return {KeyAt(inde
  * @return page size after insertion
  */
 int LeafPage::Insert(GenericKey *key, const RowId &value, const KeyManager &KM) {
-  int start = 1, mid, end = GetSize() - 1;
+  int start = 0, mid, end = GetSize() - 1;
   // find the place to insert the pair
   while (start <= end) {
     mid = (start + end) / 2;
@@ -168,7 +168,7 @@ void LeafPage::CopyNFrom(void *src, int size) {
  * If the key does not exist, then return false
  */
 bool LeafPage::Lookup(const GenericKey *key, RowId &value, const KeyManager &KM) {
-  int start = 1, mid, end = GetSize() - 1;
+  int start = 0, mid, end = GetSize() - 1;
   // find the place of the key
   while (start <= end) {
     mid = (start + end) / 2;
@@ -196,7 +196,7 @@ bool LeafPage::Lookup(const GenericKey *key, RowId &value, const KeyManager &KM)
  * @return  page size after deletion
  */
 int LeafPage::RemoveAndDeleteRecord(const GenericKey *key, const KeyManager &KM) {
-  int start = 1, mid, end = GetSize() - 1;
+  int start = 0, mid, end = GetSize() - 1;
   // find the place of the key
   while (start <= end) {
     mid = (start + end) / 2;

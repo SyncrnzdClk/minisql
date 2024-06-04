@@ -148,7 +148,7 @@ void BPlusTree::StartNewTree(GenericKey *key, const RowId &value) {
  */
 bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transaction) {
   Page* leaf_to_be_inserted = FindLeafPage(key, root_page_id_);
-  BPlusTreeLeafPage* bplus_leaf_to_be_inserted = reinterpret_cast<BPlusTreeLeafPage *>(leaf_to_be_inserted->GetData());
+  auto bplus_leaf_to_be_inserted = reinterpret_cast<BPlusTreeLeafPage *>(leaf_to_be_inserted->GetData());
   RowId temp;
   if (bplus_leaf_to_be_inserted->Lookup(key, temp, processor_)) { // if the key exist in the leaf, return immediately
     return false;

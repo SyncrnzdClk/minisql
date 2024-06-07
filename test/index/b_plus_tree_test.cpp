@@ -34,9 +34,9 @@ TEST(BPlusTreeTests, SampleTest) {
   }
   vector<GenericKey *> keys_copy(keys);
   // Shuffle data
-  // ShuffleArray(keys);
-  // ShuffleArray(values);
-  // ShuffleArray(delete_seq);
+  ShuffleArray(keys);
+  ShuffleArray(values);
+  ShuffleArray(delete_seq);
   // Map key value
   for (int i = 0; i < n; i++) {
     kv_map[keys[i]] = values[i];
@@ -56,21 +56,21 @@ TEST(BPlusTreeTests, SampleTest) {
    }
    ASSERT_TRUE(tree.Check());
    // Delete half keys
-   // for (int i = 0; i < n / 2; i++) {
-   //   tree.Remove(delete_seq[i]);
-   //   tree.PrintTree(mgr[i+1], table_schema);
-   // }
-   // tree.PrintTree(mgr[n/2+1], table_schema);
-  tree.Remove(delete_seq[6]);
-  LOG(INFO) << "DELE[7] = " << *reinterpret_cast<int*>(delete_seq[6]->data);
-  tree.PrintTree(mgr[1], table_schema);
+   for (int i = 0; i < n / 2; i++) {
+     tree.Remove(delete_seq[i]);
+     tree.PrintTree(mgr[i+1], table_schema);
+   }
+   tree.PrintTree(mgr[n/2+1], table_schema);
+  // tree.Remove(delete_seq[0]);
+  // LOG(INFO) << "DELE[0] = " << *reinterpret_cast<int*>(delete_seq[0]->data);
+  // tree.PrintTree(mgr[1], table_schema);
    // Check valid
-   // ans.clear();
-   // for (int i = 0; i < n / 2; i++) {
-   //   ASSERT_FALSE(tree.GetValue(delete_seq[i], ans));
-   // }
-   // for (int i = n / 2; i < n; i++) {
-   //   ASSERT_TRUE(tree.GetValue(delete_seq[i], ans, true));
-   //   ASSERT_EQ(kv_map[delete_seq[i]], ans[ans.size() - 1]);
-   // }
+   ans.clear();
+   for (int i = 0; i < n / 2; i++) {
+     ASSERT_FALSE(tree.GetValue(delete_seq[i], ans));
+   }
+   for (int i = n / 2; i < n; i++) {
+     ASSERT_TRUE(tree.GetValue(delete_seq[i], ans, true));
+     ASSERT_EQ(kv_map[delete_seq[i]], ans[ans.size() - 1]);
+   }
 }

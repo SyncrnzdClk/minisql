@@ -50,6 +50,9 @@ class BPlusTree {
   // expose for test purpose
   Page *FindLeafPage(const GenericKey *key, page_id_t page_id = INVALID_PAGE_ID, bool leftMost = false);
 
+  // personal added helper fucntion
+  BPlusTreeInternalPage *FindParentPage(const GenericKey *key, page_id_t page_id, int& index);
+
   // used to check whether all pages are unpinned
   bool Check();
 

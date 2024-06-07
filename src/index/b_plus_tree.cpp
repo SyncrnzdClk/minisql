@@ -285,8 +285,29 @@ void BPlusTree::Remove(const GenericKey *key, Txn *transaction) {
   
   auto leaf_page = FindLeafPage(key, root_page_id_);
   auto bplus_leaf_page = reinterpret_cast<BPlusTreeLeafPage *>(leaf_page->GetData());
+
+  // record the first value of leaf page
+  int64_t old_first_value = bplus_leaf_page->ValueAt(0).Get();
+  GenericKey* old_first_key = new GenericKey;
+  memcpy(old_first_key, bplus_leaf_page->KeyAt(0), processor_.GetKeySize());
+  LOG(INFO) << "old_first key = " << *reinterpret_cast<int*>(old_first_key->data);
+
   // if there isn't such a record to be removed, unpin the clean page
   if (bplus_leaf_page->RemoveAndDeleteRecord(key, processor_) == -1) buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), false);
+
+  // check if the removed record is the first value of the leaf page
+  if (old_first_value != bplus_leaf_page->ValueAt(0).Get()) { // if true, change the corresponding key in the upper layer
+    GenericKey* new_key = bplus_leaf_page->KeyAt(0);
+    LOG(INFO) << "old_key = " << *reinterpret_cast<int*>(old_first_key->data);
+    LOG(INFO) << "new_key = " << *reinterpret_cast<int*>(new_key->data);
+
+    int index;
+    auto bplus_parent_page = FindParentPage(old_first_key, bplus_leaf_page->GetPageId(), index);
+    bplus_parent_page->SetKeyAt(index, new_key);
+    buffer_pool_manager_->UnpinPage(bplus_parent_page->GetPageId(), true);
+  }
+
+
   // if the size is invalid, amend it
   if (bplus_leaf_page->GetSize() < bplus_leaf_page->GetMinSize()) {
     // if merge/coalesce happens, delete the page
@@ -742,4 +763,37 @@ bool BPlusTree::Check() {
     LOG(ERROR) << "problem in page unpin" << endl;
   }
   return all_unpinned;
+}
+
+
+// helper fucntion
+BPlusTreeInternalPage *BPlusTree::FindParentPage(const GenericKey *old_key, page_id_t page_id, int& index) {
+  // check if we enter an invalid page
+  ASSERT(page_id != INVALID_PAGE_ID, "unexpected error");
+  
+  auto bplus_cur_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(page_id)->GetData());
+  if (bplus_cur_page->IsLeafPage()) { // if the current page is a leaf page, go up
+    buffer_pool_manager_->UnpinPage(page_id, false);
+    return FindParentPage(old_key, bplus_cur_page->GetParentPageId(), index);
+  }
+  else { // if the current page is an inernal page, check if it has the old key
+    auto bplus_internal_cur_page = reinterpret_cast<BPlusTreeInternalPage *>(bplus_cur_page);
+      int start = 1, mid, end = bplus_internal_cur_page->GetSize()-1;
+      while (start <= end) {
+        mid = (start + end) / 2;
+        if (processor_.CompareKeys(old_key, bplus_internal_cur_page->KeyAt(mid)) == -1) {
+          end = mid - 1;
+        }
+        else if (processor_.CompareKeys(old_key, bplus_internal_cur_page->KeyAt(mid)) == 1) {
+          start = mid + 1;
+        }
+        else { // if successfully find the key in the page, return this page (and unpin it later in the porcedure 'remove')
+          index = mid;
+          return bplus_internal_cur_page;
+        }
+      }
+      // if there isn't the old key, find in the upper layer
+      buffer_pool_manager_->UnpinPage(page_id, false);
+      return FindParentPage(old_key, bplus_internal_cur_page->GetParentPageId(), index);
+  }
 }

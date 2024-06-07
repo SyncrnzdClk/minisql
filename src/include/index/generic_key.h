@@ -8,6 +8,7 @@
 
 class GenericKey {
   friend class KeyManager;
+public:
   char data[0];
 };
 

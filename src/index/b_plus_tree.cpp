@@ -58,9 +58,9 @@ bool BPlusTree::IsEmpty() const {
  * This method is used for point query
  * @return : true means key exists
  */
-bool BPlusTree::GetValue(const GenericKey *key, std::vector<RowId> &result, Txn *transaction) {
+bool BPlusTree::GetValue(const GenericKey *key, std::vector<RowId> &result, bool miao, Txn *transaction) {
   auto page = buffer_pool_manager_->FetchPage(root_page_id_);
-  auto root = reinterpret_cast<BPlusTreePage *>(page->GetData()); 
+  auto root = reinterpret_cast<BPlusTreePage *>(page->GetData());
   bool flag = false;
   if (root->IsLeafPage()) { // if the root is a leaf, just check if the key is inside it
     auto leaf_root = reinterpret_cast<BPlusTreeLeafPage *>(page->GetData());
@@ -79,8 +79,9 @@ bool BPlusTree::GetValue(const GenericKey *key, std::vector<RowId> &result, Txn 
     }
     RowId res;
 
-    // find the leaf page
+    // if the leaf page is found
     flag = reinterpret_cast<BPlusTreeLeafPage *>(next_page->GetData())->Lookup(key, res, processor_);
+    result.push_back(res);
     buffer_pool_manager_->UnpinPage(next_id, false);
   }
   buffer_pool_manager_->UnpinPage(root_page_id_, false);
@@ -120,7 +121,6 @@ void BPlusTree::StartNewTree(GenericKey *key, const RowId &value) {
   }
   else {
     root_page_id_ = root_page_id;
-
     // update the information in the index roots page
     auto index_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
     index_page->Insert(index_id_, root_page_id_);
@@ -159,12 +159,12 @@ bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transac
     if (size > leaf_max_size_) {
       // if the size after insertion exceeds the max size, perform split
       BPlusTreeLeafPage* split_page = Split(bplus_leaf_to_be_inserted, transaction);
-      buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
-      buffer_pool_manager_->UnpinPage(split_page->GetPageId(), true);
-      InsertIntoParent(bplus_leaf_to_be_inserted, split_page->KeyAt(0), split_page);
       // update the next page id of the leaf nodes
       split_page->SetNextPageId(bplus_leaf_to_be_inserted->GetNextPageId());
       bplus_leaf_to_be_inserted->SetNextPageId(split_page->GetPageId());
+      InsertIntoParent(bplus_leaf_to_be_inserted, split_page->KeyAt(0), split_page);
+      buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
+      buffer_pool_manager_->UnpinPage(split_page->GetPageId(), true);
       return true;
     }
     buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
@@ -217,7 +217,7 @@ BPlusTreeLeafPage *BPlusTree::Split(LeafPage *node, Txn *transaction) {
  */
 void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlusTreePage *new_node, Txn *transaction) {
   if (old_node->IsRootPage()) { // if the old node is the root, populate a new root
-  page_id_t new_root_page_id;
+    page_id_t new_root_page_id;
     auto new_root_page = buffer_pool_manager_->NewPage(new_root_page_id);
     // if there are not enough pages to allocate a new root page
     if (new_root_page == nullptr) {
@@ -228,10 +228,10 @@ void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlus
     bplus_new_root_page->Init(new_root_page_id, INVALID_PAGE_ID, processor_.GetKeySize(), internal_max_size_);
     
     // fetch the pages that match the old node and new node first (because we are going to update them)
-    // 这里其实有点勉强，因为在进入者一层调用之前我们已经unpin了这些pages
-    // 但是接下来来要修改他们的parent page id，然后又要unpin，所以这里fetch相当于重新pin一下
-    buffer_pool_manager_->FetchPage(old_node->GetPageId());
-    buffer_pool_manager_->FetchPage(new_node->GetPageId());
+    // // 这里其实有点勉强，因为在进入者一层调用之前我们已经unpin了这些pages
+    // // 但是接下来来要修改他们的parent page id，然后又要unpin，所以这里fetch相当于重新pin一下
+    // buffer_pool_manager_->FetchPage(old_node->GetPageId());
+    // buffer_pool_manager_->FetchPage(new_node->GetPageId());
 
     // update the old_node's and new_node's parent page id
     old_node->SetParentPageId(new_root_page_id);
@@ -244,9 +244,10 @@ void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlus
 
     // update the new root's contents, and then unpin those pages, notice here the new root will not split
     bplus_new_root_page->PopulateNewRoot(old_node->GetPageId(), key, new_node->GetPageId());
-    buffer_pool_manager_->UnpinPage(old_node->GetPageId(), true);
-    buffer_pool_manager_->UnpinPage(new_node->GetPageId(), true);
+    // buffer_pool_manager_->UnpinPage(old_node->GetPageId(), true);
+    // buffer_pool_manager_->UnpinPage(new_node->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(new_root_page->GetPageId(), true);
+    root_page_id_ = bplus_new_root_page->GetPageId();
     return ;
   }
   else {
@@ -254,8 +255,8 @@ void BPlusTree::InsertIntoParent(BPlusTreePage *old_node, GenericKey *key, BPlus
     auto bplus_parent_page = reinterpret_cast<BPlusTreeInternalPage *>(parent_page->GetData());
     bplus_parent_page->InsertNodeAfter(old_node->GetPageId(), key, new_node->GetPageId());
     // if the size of the page after insertion exceeds the max size, recursively perform split
-    if (bplus_parent_page->GetSize() < internal_max_size_) {
-      auto bplus_split_page = Split(bplus_parent_page, transaction);\
+    if (bplus_parent_page->GetSize() > internal_max_size_) {
+      auto bplus_split_page = Split(bplus_parent_page, transaction);
       // unpin the page that has been updated
       buffer_pool_manager_->UnpinPage(bplus_parent_page->GetPageId(), true);
       buffer_pool_manager_->UnpinPage(bplus_split_page->GetPageId(), true);
@@ -286,7 +287,6 @@ void BPlusTree::Remove(const GenericKey *key, Txn *transaction) {
   auto bplus_leaf_page = reinterpret_cast<BPlusTreeLeafPage *>(leaf_page->GetData());
   // if there isn't such a record to be removed, unpin the clean page
   if (bplus_leaf_page->RemoveAndDeleteRecord(key, processor_) == -1) buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), false);
-  
   // if the size is invalid, amend it
   if (bplus_leaf_page->GetSize() < bplus_leaf_page->GetMinSize()) {
     // if merge/coalesce happens, delete the page
@@ -297,6 +297,9 @@ void BPlusTree::Remove(const GenericKey *key, Txn *transaction) {
   else { // unpin the dirty page
     buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), true);
   }
+  
+  // LOG(INFO) << "afetr amending bplus leaf page value at 0 is " << bplus_leaf_page->ValueAt(0).Get();
+  // LOG(INFO) << "afetr amending bplus leaf page value at 1 is " << bplus_leaf_page->ValueAt(1).Get();
 }
 
 /* todo
@@ -308,7 +311,17 @@ void BPlusTree::Remove(const GenericKey *key, Txn *transaction) {
  */
 template <typename N>
 bool BPlusTree::CoalesceOrRedistribute(N *&node, Txn *transaction) {
-  ASSERT(node->GetParentPageId() != INVALID_PAGE_ID, "root is empty"); // make sure removing records won't empty the root
+  if(node->GetParentPageId() == INVALID_PAGE_ID) { // deal with the root
+    if (node->GetSize() >= 2) { // if there are more than 2 values, the root is valid
+      return false;
+    }
+    else { // if there is only one value left, update the root
+      buffer_pool_manager_->UnpinPage(root_page_id_, true);
+      UpdateRootPageId();
+      return true;
+    }
+  }
+  // ASSERT(node->GetParentPageId() != INVALID_PAGE_ID, "root is empty"); // make sure removing records won't empty the root
   
   // if the size of the node is valid, unpin the page
   if (node->GetSize() >= node->GetMinSize()) {
@@ -323,7 +336,7 @@ bool BPlusTree::CoalesceOrRedistribute(N *&node, Txn *transaction) {
   page_id_t sib_page_id;
   // find the sibling's index
   int index = bplus_parent_page->ValueIndex(node->GetPageId());
-  if (index == 0) { // if the current node is the first child 
+  if (index == 0) { // if the current node is the first child
     sib_page_id = bplus_parent_page->ValueAt(index+1);
   }
   else { // if the current node is not the first child, i'll just consider the pre node as its sibling for the sake of convenience
@@ -367,10 +380,8 @@ bool BPlusTree::Coalesce(LeafPage *&neighbor_node, LeafPage *&node, InternalPage
   if (index == 0) { // if the current node is at index 0, merge the node at index 1
     // move all of the contents of the node to its neighbor
     neighbor_node->MoveAllTo(node);
-
     // remove the node at index 1
     parent->Remove(1);
-
     // delete the physical page and unpin the node and the neighbor node
     buffer_pool_manager_->UnpinPage(neighbor_node->GetPageId(), false);
     buffer_pool_manager_->UnpinPage(node->GetPageId(), true);
@@ -434,7 +445,6 @@ void BPlusTree::Redistribute(LeafPage *neighbor_node, LeafPage *node, int index)
   // find the parent node of the current node
   auto parent_page = buffer_pool_manager_->FetchPage(node->GetParentPageId());
   auto bplus_parent_page = reinterpret_cast<BPlusTreeInternalPage *>(parent_page->GetData());
-
   if (index == 0) {
     int middle_key_idx = bplus_parent_page->ValueIndex(neighbor_node->GetPageId());
     ASSERT(middle_key_idx != -1, "middle key calculation error");
@@ -442,11 +452,11 @@ void BPlusTree::Redistribute(LeafPage *neighbor_node, LeafPage *node, int index)
     // calculate the key that is going to be the new middle key
     GenericKey* new_middle_key = neighbor_node->KeyAt(1);
 
-    // redistribute the key
-    neighbor_node->MoveFirstToEndOf(node);
-
     // update the parent node's middle key
     bplus_parent_page->SetKeyAt(middle_key_idx, new_middle_key);
+
+    // redistribute the key
+    neighbor_node->MoveFirstToEndOf(node);
   }
   else {
     int middle_key_idx = bplus_parent_page->ValueIndex(neighbor_node->GetPageId());
@@ -454,7 +464,7 @@ void BPlusTree::Redistribute(LeafPage *neighbor_node, LeafPage *node, int index)
 
     // calculate the key that is going to be the new middle key
     GenericKey* new_middle_key = neighbor_node->KeyAt(neighbor_node->GetSize()-1);
-    
+
     // redistribute the key
     neighbor_node->MoveLastToFrontOf(node);
 
@@ -479,12 +489,13 @@ void BPlusTree::Redistribute(InternalPage *neighbor_node, InternalPage *node, in
     
     // calculate the key that going to be the new middle key
     GenericKey* new_middle_key = neighbor_node->KeyAt(1);
-    
-    // redistribute the key
-    neighbor_node->MoveFirstToEndOf(node, middle_key, buffer_pool_manager_);
-    
+
     // update the parent node's middle key
     bplus_parent_page->SetKeyAt(middle_key_idx, new_middle_key);
+
+    // redistribute the key
+    neighbor_node->MoveFirstToEndOf(node, middle_key, buffer_pool_manager_);
+
   }
   else {
     int middle_key_idx = bplus_parent_page->ValueIndex(node->GetPageId());
@@ -590,6 +601,20 @@ Page *BPlusTree::FindLeafPage(const GenericKey *key, page_id_t page_id, bool lef
  */
 void BPlusTree::UpdateRootPageId(int insert_record) {
   // 服了为什么这个函数放在最后，我前面写的时候没看到，直接手动更新了。
+  // 目前这个函数只在删除的过程中要更新root的时候调用了
+      auto node = reinterpret_cast<BPlusTreeInternalPage*>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
+      root_page_id_ = node->ValueAt(0);
+      // update the root page id stored in the IndexRootsPage
+      auto index_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
+      index_page->Update(index_id_, root_page_id_);
+      buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
+
+      // set the new root page's parent page id to InvalidPageId, and delete the old root page
+      auto bplus_new_root_page = reinterpret_cast<BPlusTreeLeafPage *>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
+      bplus_new_root_page->SetParentPageId(INVALID_PAGE_ID);
+      buffer_pool_manager_->UnpinPage(root_page_id_, true);
+      buffer_pool_manager_->UnpinPage(node->GetPageId(), false);
+      buffer_pool_manager_->DeletePage(node->GetPageId());
 }
 
 /**

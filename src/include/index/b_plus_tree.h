@@ -39,7 +39,7 @@ class BPlusTree {
   void Remove(const GenericKey *key, Txn *transaction = nullptr);
 
   // return the value associated with a given key
-  bool GetValue(const GenericKey *key, std::vector<RowId> &result, Txn *transaction = nullptr);
+  bool GetValue(const GenericKey *key, std::vector<RowId> &result, bool miao = false, Txn *transaction = nullptr);
 
   IndexIterator Begin();
 

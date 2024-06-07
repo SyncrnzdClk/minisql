@@ -25,6 +25,7 @@ void InternalPage::Init(page_id_t page_id, page_id_t parent_id, int key_size, in
   SetKeySize(key_size);
   SetParentPageId(parent_id);
   SetPageId(page_id);
+  // SetKeyAt(0, );
 }
 /*
  * Helper method to get/set the key associated with input "index"(a.k.a
@@ -84,7 +85,6 @@ page_id_t InternalPage::Lookup(const GenericKey *key, const KeyManager &KM) {
       return ValueAt(mid);
     }
   }
-
   return ValueAt(end);
 }
 
@@ -102,6 +102,8 @@ void InternalPage::PopulateNewRoot(const page_id_t &old_value, GenericKey *new_k
   SetValueAt(0, old_value);
   SetValueAt(1, new_value);
   SetKeyAt(1, new_key);
+  // SetKeyAt(0, new_key);
+  SetSize(2);
 }
 
 /*
@@ -112,14 +114,15 @@ void InternalPage::PopulateNewRoot(const page_id_t &old_value, GenericKey *new_k
 int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_key, const page_id_t &new_value) {
   for (int i = 0; i < GetSize(); i++) { // iterate through the page to find the old value (old page id)
     if (ValueAt(i) == old_value) {
-      SetSize(GetSize()+1);
       // insert the new key value pair into the data array
-      for (int j = GetSize(); j > i; j--) {
+      for (int j = GetSize(); j > i+1; j--) {
         SetKeyAt(j, KeyAt(j-1));
         SetValueAt(j, ValueAt(j-1));
       }
-      SetKeyAt(i, new_key);
-      SetValueAt(i, new_value);
+      SetKeyAt(i+1, new_key);
+      SetValueAt(i+1, new_value);
+      SetSize(GetSize()+1);
+      break;
     }
   }
   return GetSize();

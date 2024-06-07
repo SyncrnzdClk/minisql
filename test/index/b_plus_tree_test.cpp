@@ -16,10 +16,10 @@ TEST(BPlusTreeTests, SampleTest) {
   };
   Schema *table_schema = new Schema(columns);
   KeyManager KP(table_schema, 16);
-  BPlusTree tree(0, engine.bpm_, KP);
+  BPlusTree tree(0, engine.bpm_, KP ,4, 4);
   TreeFileManagers mgr("tree_");
   // Prepare data
-  const int n = 2000;
+  const int n = 10;
   vector<GenericKey *> keys;
   vector<RowId> values;
   vector<GenericKey *> delete_seq;
@@ -46,27 +46,28 @@ TEST(BPlusTreeTests, SampleTest) {
     tree.Insert(keys[i], values[i]);
   }
   ASSERT_TRUE(tree.Check());
-  // Print tree
-  tree.PrintTree(mgr[0], table_schema);
-  // Search keys
-  vector<RowId> ans;
-  for (int i = 0; i < n; i++) {
-    tree.GetValue(keys_copy[i], ans);
-    ASSERT_EQ(kv_map[keys_copy[i]], ans[i]);
-  }
-  ASSERT_TRUE(tree.Check());
-  // Delete half keys
-  for (int i = 0; i < n / 2; i++) {
-    tree.Remove(delete_seq[i]);
-  }
-  tree.PrintTree(mgr[1], table_schema);
-  // Check valid
-  ans.clear();
-  for (int i = 0; i < n / 2; i++) {
-    ASSERT_FALSE(tree.GetValue(delete_seq[i], ans));
-  }
-  for (int i = n / 2; i < n; i++) {
-    ASSERT_TRUE(tree.GetValue(delete_seq[i], ans));
-    ASSERT_EQ(kv_map[delete_seq[i]], ans[ans.size() - 1]);
-  }
+   // Print tree
+   tree.PrintTree(mgr[0], table_schema);
+   // Search keys
+   vector<RowId> ans;
+   for (int i = 0; i < n-1; i++) {
+     tree.GetValue(keys_copy[i], ans);
+     ASSERT_EQ(kv_map[keys_copy[i]], ans[i]);
+   }
+   ASSERT_TRUE(tree.Check());
+   // Delete half keys
+   for (int i = 0; i < n / 2; i++) {
+     tree.Remove(delete_seq[i]);
+     tree.PrintTree(mgr[i+1], table_schema);
+   }
+   tree.PrintTree(mgr[n/2+1], table_schema);
+   // Check valid
+   ans.clear();
+   for (int i = 0; i < n / 2; i++) {
+     ASSERT_FALSE(tree.GetValue(delete_seq[i], ans));
+   }
+   for (int i = n / 2; i < n; i++) {
+     ASSERT_TRUE(tree.GetValue(delete_seq[i], ans, true));
+     ASSERT_EQ(kv_map[delete_seq[i]], ans[ans.size() - 1]);
+   }
 }

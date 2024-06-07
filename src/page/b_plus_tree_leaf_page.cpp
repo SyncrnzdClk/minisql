@@ -155,7 +155,7 @@ void LeafPage::MoveHalfTo(LeafPage *recipient) {
  */
 void LeafPage::CopyNFrom(void *src, int size) {
   int start_index = GetSize();
-  PairCopy(start_index + pairs_off, src, size);
+  PairCopy(start_index * pair_size + pairs_off, src, size);
   SetSize(start_index + size);
 }
 
@@ -246,7 +246,7 @@ void LeafPage::MoveFirstToEndOf(LeafPage *recipient) {
   // move the contents forward to make sure they are continuously stored
   for (int i = 0; i < GetSize()-1; i++) {
     SetKeyAt(i, KeyAt(i+1));
-    SetValueAt(i, ValueAt(i-1));
+    SetValueAt(i, ValueAt(i+1));
   }
 
   SetSize(GetSize()-1);

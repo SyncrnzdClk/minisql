@@ -15,28 +15,53 @@ BPlusTree::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_manager
     : index_id_(index_id),
       buffer_pool_manager_(buffer_pool_manager),
       processor_(KM),
-      leaf_max_size_(PAGE_SIZE / KM.GetKeySize() - 1),
-      internal_max_size_(PAGE_SIZE / KM.GetKeySize() - 1) {
+      leaf_max_size_(PAGE_SIZE / (KM.GetKeySize() * 2)- 1),
+      internal_max_size_(PAGE_SIZE / (KM.GetKeySize() * 2)- 1) {
         root_page_id_ = INVALID_PAGE_ID;
-        // // initialize the root page
-        // auto root_index_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager->NewPage(root_page_id_));
-        // if (!root_index_page->GetRootId(index_id, &root_page_id_)) {
-        //   // if the GetRootId doesn't return a valid root page id
-        //   root_page_id_ = INVALID_PAGE_ID;
-        // }
-        // else {
-        //   // if successfully get the root id, initialize the root page
-        //   auto root_page = reinterpret_cast<BPlusTreeLeafPage *>(buffer_pool_manager->FetchPage(root_page_id_)->GetData());
-        //   root_page->Init(root_page_id_, INVALID_PAGE_ID, KM.GetKeySize(), leaf_max_size);
-        //   buffer_pool_manager->UnpinPage(root_page_id_, true);
-        // }
-        // buffer_pool_manager->UnpinPage(INDEX_ROOTS_PAGE_ID, false);
 }
 
 void BPlusTree::Destroy(page_id_t current_page_id) {
-  // i guess the upper layer would call this function recursively to destroy every page
-  buffer_pool_manager_->UnpinPage(current_page_id, true);
-  buffer_pool_manager_->DeletePage(current_page_id);
+  // this function recursively calls itself, and when the upper layer call this fucntion, the current page id is INVALID_PAGE_ID
+  if (current_page_id == INVALID_PAGE_ID) { 
+    // if there is no root page , just return, no need to delete anything
+    if (root_page_id_ == INVALID_PAGE_ID) return;
+
+    // get the root page of the bplustree
+    auto root_page = buffer_pool_manager_->FetchPage(root_page_id_);
+    auto bplus_root_page = reinterpret_cast<BPlusTreePage *>(root_page->GetData());
+
+    if (bplus_root_page->IsLeafPage()) { // if there is only a root page, delete it and return
+      buffer_pool_manager_->UnpinPage(root_page_id_, false);
+      buffer_pool_manager_->DeletePage(root_page_id_);
+      return ;
+    }
+    else { // if there are more pages, recursively call this function
+      auto bplus_internal_root_page = reinterpret_cast<BPlusTreeInternalPage *>(bplus_root_page);
+      for (int i = 0; i < bplus_internal_root_page->GetSize(); i++) {
+        Destroy(bplus_internal_root_page->ValueAt(i));
+      }
+      buffer_pool_manager_->UnpinPage(root_page_id_, false);
+      buffer_pool_manager_->DeletePage(root_page_id_);
+      return ;
+    }
+  }
+  else {
+    auto bplus_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(current_page_id)->GetData());
+    if (bplus_page->IsLeafPage()) { // if this is a leaf page, delete it and return
+      buffer_pool_manager_->UnpinPage(current_page_id, false);
+      buffer_pool_manager_->DeletePage(current_page_id);
+      return ;
+    }
+    else { // if this is an internal page, recursively call this function
+      auto bplus_internal_page = reinterpret_cast<BPlusTreeInternalPage *>(bplus_page);
+      for (int i = 0; i < bplus_internal_page->GetSize(); i++) {
+        Destroy(bplus_internal_page->ValueAt(i));
+      }
+      buffer_pool_manager_->UnpinPage(current_page_id, false);
+      buffer_pool_manager_->DeletePage(current_page_id);
+      return ;
+    }
+  }
 }
 
 /*
@@ -155,11 +180,7 @@ bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transac
   }
   else { // insert the entry
     int size;
-    LOG(INFO) << "BEFORE INSERTION, PAGE ID = " << leaf_to_be_inserted->GetPageId();
-    LOG(INFO) << "BEFORE INSERTION, BPLUS PAGE ID = " << bplus_leaf_to_be_inserted->GetPageId();
     size = bplus_leaf_to_be_inserted->Insert(key, value, processor_);
-    LOG(INFO) << "AFTER INSERTION, PAGE ID = " << leaf_to_be_inserted->GetPageId();
-    LOG(INFO) << "AFTER INSERTION, BPLUS PAGE ID = " << bplus_leaf_to_be_inserted->GetPageId();
     if (size > leaf_max_size_) {
       // if the size after insertion exceeds the max size, perform split
       BPlusTreeLeafPage* split_page = Split(bplus_leaf_to_be_inserted, transaction);
@@ -171,7 +192,6 @@ bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transac
       buffer_pool_manager_->UnpinPage(split_page->GetPageId(), true);
       return true;
     }
-    LOG(INFO) << "WHY? KEY HERE IS " << *reinterpret_cast<int*>(key) << " and the leaf to be inserted is page " << leaf_to_be_inserted->GetPageId();
     buffer_pool_manager_->UnpinPage(bplus_leaf_to_be_inserted->GetPageId(), true);
     return true;
 
@@ -597,7 +617,6 @@ IndexIterator BPlusTree::End() {
  * Note: the leaf page is pinned, you need to unpin it after use.
  */
 Page *BPlusTree::FindLeafPage(const GenericKey *key, page_id_t page_id, bool leftMost) {
-  LOG(INFO) << "PAGE ID = " << page_id;
   auto cur_page = buffer_pool_manager_->FetchPage(page_id);
   if (reinterpret_cast<BPlusTreePage *>(cur_page->GetData())->IsLeafPage()) { // if the current page is a leaf page
     // notice that here we do not unpin the page, because our return type is page*, which means we still need to use it in the function that calls this function

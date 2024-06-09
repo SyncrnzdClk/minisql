@@ -19,7 +19,7 @@ TEST(BPlusTreeTests, SampleTest) {
   BPlusTree tree(0, engine.bpm_, KP);
   TreeFileManagers mgr("tree_");
   // Prepare data
-  const int n = 170;
+  const int n = 2000;
   vector<GenericKey *> keys;
   vector<RowId> values;
   vector<GenericKey *> delete_seq;
@@ -34,9 +34,9 @@ TEST(BPlusTreeTests, SampleTest) {
   }
   vector<GenericKey *> keys_copy(keys);
   // Shuffle data
-  // ShuffleArray(keys);
-  // ShuffleArray(values);
-  // ShuffleArray(delete_seq);
+  ShuffleArray(keys);
+  ShuffleArray(values);
+  ShuffleArray(delete_seq);
   // Map key value
   for (int i = 0; i < n; i++) {
     kv_map[keys[i]] = values[i];
@@ -60,9 +60,6 @@ TEST(BPlusTreeTests, SampleTest) {
      tree.Remove(delete_seq[i]);
    }
    tree.PrintTree(mgr[1], table_schema);
-  // tree.Remove(delete_seq[0]);
-  // LOG(INFO) << "DELE[0] = " << *reinterpret_cast<int*>(delete_seq[0]->data);
-  // tree.PrintTree(mgr[1], table_schema);
    // Check valid
    ans.clear();
    for (int i = 0; i < n / 2; i++) {

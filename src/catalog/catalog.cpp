@@ -218,7 +218,42 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
                                     const std::vector<std::string> &index_keys, Txn *txn, IndexInfo *&index_info,
                                     const string &index_type) {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+  
+  // check whether the table exist
+  if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
+  // check if the index already exist
+  std::unordered_map<std::string, index_id_t>& indexes_in_table = index_names_[table_name];
+  if (indexes_in_table.count(index_name) != 0) return DB_INDEX_ALREADY_EXIST;
+
+  // update the index information in the corresponding table
+  index_id_t index_id = next_index_id_++;
+  indexes_in_table.emplace(index_name, index_id);
+
+  // initialize index info
+  // 1. initialize index meta data
+  // 1.1 construct key map
+  std::vector<uint32_t> keymap; 
+  TableInfo* host_table = tables_[table_names_[table_name]];
+  Schema* index_schema = host_table->GetSchema();
+  for (auto index_key : index_keys) {
+    uint32_t key;
+    if (index_schema->GetColumnIndex(index_key, key) != DB_COLUMN_NAME_NOT_EXIST) {
+      keymap.push_back(key);
+    }
+    else {
+      return DB_COLUMN_NAME_NOT_EXIST;
+    }
+  }
+  // 1.2 initialize the meta data
+  IndexMetadata* meta = IndexMetadata::Create(index_id, index_name, table_names_[table_name], keymap);
+
+  // 2.1 initialize the index info
+  index_info->Init(meta, host_table, buffer_pool_manager_);
+
+  // 2.2 insert the index info information into the indexes_
+  indexes_.emplace(index_id, index_info);
+
+  return DB_SUCCESS;
 }
 
 /**
@@ -227,7 +262,18 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
 dberr_t CatalogManager::GetIndex(const std::string &table_name, const std::string &index_name,
                                  IndexInfo *&index_info) const {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+
+  // first check if the table and the index exist
+  if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
+  if (index_names_.count(table_name) == 0) return DB_INDEX_NOT_FOUND;
+
+  const std::unordered_map<std::string, index_id_t>& indexes_in_table = index_names_.at(table_name); // notice here we use at instead of [], because it is a conts function, while [] permits insertion
+  if (indexes_in_table.count(index_name) == 0) return DB_INDEX_NOT_FOUND;
+
+  // get the index id and get the index info accrodingly
+  const index_id_t& index_id = indexes_in_table.at(index_name);
+  index_info = indexes_.at(index_id);
+  return DB_SUCCESS;
 }
 
 /**
@@ -235,7 +281,21 @@ dberr_t CatalogManager::GetIndex(const std::string &table_name, const std::strin
  */
 dberr_t CatalogManager::GetTableIndexes(const std::string &table_name, std::vector<IndexInfo *> &indexes) const {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+
+  // first check if the table and idnexes exist
+  if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
+  if (index_names_.count(table_name) == 0) return DB_INDEX_NOT_FOUND;
+
+  // get the indexes in the given table
+  const unordered_map<std::string, index_id_t>& index_in_table = index_names_.at(table_name);
+
+  // insert the index info into the indexes
+  for (const auto& target_index : index_in_table) {
+    const index_id_t& index_id = target_index.second;
+    indexes.push_back(indexes_.at(index_id));
+  }
+
+  return DB_SUCCESS;
 }
 
 /**
@@ -243,7 +303,45 @@ dberr_t CatalogManager::GetTableIndexes(const std::string &table_name, std::vect
  */
 dberr_t CatalogManager::DropTable(const string &table_name) {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+  // first check if the table exists
+  if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
+
+  // remove the information in table_names_ and tables_
+  table_id_t table_id = table_names_.at(table_name);
+  TableInfo*& table_info = tables_.at(table_id);
+  // get the table heap and free it
+  TableHeap* table_heap = table_info->GetTableHeap();
+  table_heap->FreeTableHeap();
+  // delete table info
+  delete table_info;
+  tables_.erase(table_id);
+  table_names_.erase(table_name);
+
+  if (index_names_.count(table_name) > 0) { // if there are some indexes on the table
+    // remove the information in the idnex_names_ and indexes_
+    std::unordered_map<std::string, index_id_t>& index_in_table = index_names_.at(table_name);
+    for (auto& target_index : index_in_table) { // iterate through all the pairs in the map to delete the index info and erase the record in the indexes_
+      IndexInfo*& index_info = indexes_.at(target_index.second);
+      Index* index = index_info->GetIndex();
+      // destroy the whole index
+      index->Destroy();
+      delete index_info;
+
+      // delete the information about the index in the index_names_ and indexes_
+      indexes_.erase(target_index.second);
+      index_names_.erase(target_index.first);
+
+      // erase the index information in catalog meta
+      catalog_meta_->index_meta_pages_.erase(target_index.second);
+      indexes_.erase(target_index.second);
+    }
+    index_names_.erase(table_name);
+  }
+  
+  // erase the table information in catalog meta
+  catalog_meta_->table_meta_pages_.erase(table_id);
+
+  return DB_SUCCESS;
 }
 
 /**
@@ -251,7 +349,27 @@ dberr_t CatalogManager::DropTable(const string &table_name) {
  */
 dberr_t CatalogManager::DropIndex(const string &table_name, const string &index_name) {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+  
+  // check if the table exists
+  if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
+  
+  // check if the index exists
+  if (index_names_.count(index_name) == 0) return DB_INDEX_NOT_FOUND;
+
+  // find the index and delete it
+  std::unordered_map<std::string, index_id_t>& index_in_table = index_names_.at(table_name);
+  index_id_t index_id = index_in_table.at(index_name);
+  IndexInfo*& index_info = indexes_.at(index_id);
+  Index* index = index_info->GetIndex();
+  index->Destroy();
+  delete index_info;
+  indexes_.erase(index_id);
+  index_in_table.erase(index_name);
+  
+
+  // erase the information about the index in the index_meta_pages_
+  catalog_meta_->DeleteIndexMetaPage(buffer_pool_manager_, index_id);
+  return DB_SUCCESS;
 }
 
 /**

@@ -149,6 +149,7 @@ void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer
  *
  */
 void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool_manager) {
+  LOG(INFO) << "CUR NODE page id is = " << GetPageId();
   // get the start index of the page
   int start_index = GetSize();
 
@@ -158,8 +159,9 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
   // reset the parent page_id of the pages that have been copied to the current internal page
   // notice that here we cast the page to type bplustreepage but not bplustreeinternalpage because it could be a leaf page
   for (int i = 0; i < size; i++) {
-    auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(ValueAt(start_index))->GetData());
+    auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(ValueAt(start_index+i))->GetData());
     page->SetParentPageId(GetPageId());
+    LOG(INFO) << "for page " << i << " paren page id = " << GetPageId();
     buffer_pool_manager->UnpinPage(page->GetPageId(), true);
   }
 

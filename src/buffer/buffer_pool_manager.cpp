@@ -181,6 +181,7 @@ bool BufferPoolManager::DeletePage(page_id_t page_id) {
  * TODO: Student Implement
  */
 bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
+  LOG(INFO) << "unpinned page id = " << page_id;
   // auto it = std::find(page_table_.begin(), page_table_.end(), page_id); 
   // LOG(INFO) << "page_id = " << page_id << "page_table_.count(page_id) = " << page_table_.count(page_id);
   if (page_table_.count(page_id) == 0) return false; // if the page does not exist

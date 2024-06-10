@@ -50,12 +50,12 @@ uint32_t Column::SerializeTo(char *buf) const {
 
   MACH_WRITE_UINT32(buf, COLUMN_MAGIC_NUM);
   serializeSize += sizeof(uint32_t);
-  
+
   MACH_WRITE_UINT32(buf + serializeSize, name_.length());
   serializeSize += sizeof(uint32_t);
 
   MACH_WRITE_STRING(buf + serializeSize, name_);
-  serializeSize += sizeof(name_.length());
+  serializeSize += name_.length();
 
   MACH_WRITE_TO(uint32_t, buf + serializeSize, type_);
   serializeSize += sizeof(uint32_t);
@@ -71,6 +71,7 @@ uint32_t Column::SerializeTo(char *buf) const {
 
   MACH_WRITE_TO(bool, buf + serializeSize, unique_);
   serializeSize += sizeof(bool);
+  ASSERT(serializeSize == GetSerializedSize(), "fault");
 
   return serializeSize;
 }
@@ -86,18 +87,18 @@ uint32_t Column::GetSerializedSize() const {
  * TODO: Student Implement
  */
 uint32_t Column::DeserializeFrom(char *buf, Column *&column) {
-  uint32_t offset;
-  
+  uint32_t offset = 0;
+
   uint32_t magicNum = MACH_READ_UINT32(buf);
   offset += sizeof(uint32_t);
   EXPECT_EQ(magicNum, COLUMN_MAGIC_NUM);
-  
   uint32_t nameLength = MACH_READ_UINT32(buf + offset);
   offset += sizeof(uint32_t);
-  
-  char *charname = new char[nameLength];
+
+  char *charname = new char[nameLength+1];
   memcpy(charname, buf+offset, nameLength);
   offset += nameLength;
+  charname[nameLength] = '\0';
   std::string column_name(charname);
 
   TypeId type = (TypeId)MACH_READ_UINT32(buf + offset);

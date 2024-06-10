@@ -77,7 +77,6 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
     catalog_meta_ = CatalogMeta::DeserializeFrom(page->GetData());
     next_table_id_ = catalog_meta_->GetNextTableId();
     next_index_id_ = catalog_meta_->GetNextIndexId();
-    
     // set the data about table
     for (auto it = catalog_meta_->table_meta_pages_.begin(); it != catalog_meta_->table_meta_pages_.end(); it++) {
       
@@ -85,9 +84,10 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
       auto tablePage = buffer_pool_manager->FetchPage(it->second);
       TableInfo* table_info = TableInfo::Create();
       // here we create a table_meta first (with invalid contents, just to allocate memory), and then deserialize the data into it
-      TableMetadata* table_meta = TableMetadata::Create(it->first, "", INVALID_PAGE_ID, nullptr);
+      // TableMetadata* table_meta = TableMetadata::Create(it->first, "", INVALID_PAGE_ID, nullptr);
+      TableMetadata* table_meta = nullptr;
       TableMetadata::DeserializeFrom(tablePage->GetData(), table_meta);
-      
+
       TableHeap* table_heap = TableHeap::Create(buffer_pool_manager, table_meta->GetFirstPageId(), table_meta->GetSchema(), log_manager, lock_manager);
       table_info->Init(table_meta, table_heap);
       buffer_pool_manager->UnpinPage(it->second, false);
@@ -152,27 +152,36 @@ dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schem
   // first check whether the table is already exist
   if (table_names_.find(table_name) != table_names_.end()) return DB_TABLE_ALREADY_EXIST;
   
-  // for every table, we will assign a new page to manage it
-  page_id_t page_id; 
-  
-  // if there isn't enough page, return DB_FAILED
-  Page* table_meta_page = buffer_pool_manager_->NewPage(page_id);
-  if (table_meta_page == nullptr) return DB_FAILED;
+  // create table info object and copy schema
+  table_info = TableInfo::Create();
+  auto table_schema = TableSchema::DeepCopySchema(schema);
 
-  // create a new table heap
-  table_id_t table_id = next_table_id_++;
-  TableHeap* table_heap = TableHeap::Create(buffer_pool_manager_, schema, txn, nullptr, nullptr);
-  TableMetadata* table_meta = TableMetadata::Create(table_id, table_name, table_heap->GetFirstPageId(), schema);
-  
-  // serialize the table_meta into the table_meta_page
-  table_meta->SerializeTo(table_meta_page->GetData());
-  buffer_pool_manager_->UnpinPage(table_meta_page->GetPageId(), true);
+  // create table heap
+  auto table_heap = TableHeap::Create(buffer_pool_manager_, table_schema, txn, log_manager_, lock_manager_);
+
+  // create table metadata
+  auto table_id = next_table_id_.fetch_add(1);
+  auto table_meta = TableMetadata::Create(table_id, table_name, table_heap->GetFirstPageId(), table_schema);
+
+  // init table info
   table_info->Init(table_meta, table_heap);
 
-  // update the information in catalog manager
-  table_names_.emplace(table_name, table_id);
+  // emplace the map
   tables_.emplace(table_id, table_info);
-  
+  table_names_.emplace(table_name, table_id);
+  index_names_.emplace(table_name, std::unordered_map<std::string, index_id_t>{});
+
+  // write table metadata to table metadata page
+  auto table_meta_page_id = INVALID_PAGE_ID;
+  auto page = buffer_pool_manager_->NewPage(table_meta_page_id);
+  ASSERT(page != nullptr, "page allocation error");
+  table_meta->SerializeTo(page->GetData());
+  buffer_pool_manager_->UnpinPage(table_meta_page_id, true);
+
+  // write catalog metadata to catalog meatadata page
+  catalog_meta_->table_meta_pages_.emplace(table_id, table_meta_page_id);
+  ASSERT(DB_SUCCESS == FlushCatalogMetaPage(), "failed to flush catalog meta page."); 
+
   return DB_SUCCESS;
 }
 
@@ -377,7 +386,13 @@ dberr_t CatalogManager::DropIndex(const string &table_name, const string &index_
  */
 dberr_t CatalogManager::FlushCatalogMetaPage() const {
   // ASSERT(false, "Not Implemented yet");
-  return DB_FAILED;
+  // buffer_pool_manager_->FetchPage(CATALOG_META_PAGE_ID);
+  // buffer_pool_manager_->UnpinPage(CATALOG_META_PAGE_ID, true);
+  auto catalog_meta_page = buffer_pool_manager_->FetchPage(CATALOG_META_PAGE_ID);
+  catalog_meta_->SerializeTo(catalog_meta_page->GetData());
+  buffer_pool_manager_->UnpinPage(CATALOG_META_PAGE_ID, true);
+  if (buffer_pool_manager_->FlushPage(CATALOG_META_PAGE_ID)) return DB_SUCCESS;
+  else return DB_FAILED;
 }
 
 /**
@@ -385,6 +400,7 @@ dberr_t CatalogManager::FlushCatalogMetaPage() const {
  */
 dberr_t CatalogManager::LoadTable(const table_id_t table_id, const page_id_t page_id) {
   // ASSERT(false, "Not Implemented yet");
+  
   return DB_FAILED;
 }
 

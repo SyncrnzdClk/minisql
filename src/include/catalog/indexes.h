@@ -67,7 +67,15 @@ class IndexInfo {
     // Step1: init index metadata and table info
     // Step2: mapping index key to key schema
     // Step3: call CreateIndex to create the index
-    ASSERT(false, "Not Implemented yet.");
+    // ASSERT(false, "Not Implemented yet.");
+    
+    meta_data_ = meta_data;
+    
+    vector<uint32_t> keymap = meta_data->GetKeyMapping();
+    Schema* table_schema = table_info->GetSchema();
+    key_schema_ = Schema::ShallowCopySchema(table_schema, keymap);
+
+    index_ = CreateIndex(buffer_pool_manager, "bptree");
   }
 
   inline Index *GetIndex() { return index_; }

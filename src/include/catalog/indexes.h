@@ -70,7 +70,7 @@ class IndexInfo {
     // ASSERT(false, "Not Implemented yet.");
     
     meta_data_ = meta_data;
-    
+
     vector<uint32_t> keymap = meta_data->GetKeyMapping();
     Schema* table_schema = table_info->GetSchema();
     key_schema_ = Schema::ShallowCopySchema(table_schema, keymap);

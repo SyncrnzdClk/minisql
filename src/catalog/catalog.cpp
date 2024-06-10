@@ -103,16 +103,16 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
       // fetch the page that contains the data about the index, and deserialize the data into index_meta
       auto indexPage = buffer_pool_manager->FetchPage(it->second);
       IndexInfo* index_info = IndexInfo::Create();
-      // here we create a new index_meta (with invalid contents, just to allocate memory) and then deserialize the date into it
-      IndexMetadata* index_meta = IndexMetadata::Create(it->first, "", -1, vector<uint32_t>());
+
+      IndexMetadata* index_meta = nullptr;
       IndexMetadata::DeserializeFrom(indexPage->GetData(), index_meta);
-      
+
       // initialize the index_info
       ASSERT(tables_.find(index_meta->GetTableId()) != tables_.end(), "the table does not exist");      
       TableInfo* table_info = tables_.find(index_meta->GetTableId())->second;
       index_info->Init(index_meta, table_info, buffer_pool_manager);
       buffer_pool_manager->UnpinPage(it->second, false);
-      
+
       // set the map for indexes: table_name->index_name->indexes
       // first we check whether this index belongs to some table which is already in the map
       auto index_name_map_it = index_names_.find(table_info->GetTableName());
@@ -174,7 +174,7 @@ dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schem
   // write table metadata to table metadata page
   auto table_meta_page_id = INVALID_PAGE_ID;
   auto page = buffer_pool_manager_->NewPage(table_meta_page_id);
-  ASSERT(page != nullptr, "page allocation error");
+  ASSERT(page != nullptr, "page allocation error.");
   table_meta->SerializeTo(page->GetData());
   buffer_pool_manager_->UnpinPage(table_meta_page_id, true);
 
@@ -231,18 +231,14 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
   // check whether the table exist
   if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
   // check if the index already exist
-  std::unordered_map<std::string, index_id_t>& indexes_in_table = index_names_[table_name];
+  std::unordered_map<std::string, index_id_t>& indexes_in_table = index_names_.at(table_name);
   if (indexes_in_table.count(index_name) != 0) return DB_INDEX_ALREADY_EXIST;
-
-  // update the index information in the corresponding table
-  index_id_t index_id = next_index_id_++;
-  indexes_in_table.emplace(index_name, index_id);
 
   // initialize index info
   // 1. initialize index meta data
   // 1.1 construct key map
   std::vector<uint32_t> keymap; 
-  TableInfo* host_table = tables_[table_names_[table_name]];
+  TableInfo* host_table = tables_.at(table_names_.at(table_name));
   Schema* index_schema = host_table->GetSchema();
   for (auto index_key : index_keys) {
     uint32_t key;
@@ -253,14 +249,30 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
       return DB_COLUMN_NAME_NOT_EXIST;
     }
   }
+
+  // update the index information in the corresponding table
+  index_id_t index_id = next_index_id_.fetch_add(1);
+  indexes_in_table.emplace(index_name, index_id);
+
   // 1.2 initialize the meta data
-  IndexMetadata* meta = IndexMetadata::Create(index_id, index_name, table_names_[table_name], keymap);
+  IndexMetadata* index_meta = IndexMetadata::Create(index_id, index_name, table_names_[table_name], keymap);
 
   // 2.1 initialize the index info
-  index_info->Init(meta, host_table, buffer_pool_manager_);
+  index_info = IndexInfo::Create();
+  index_info->Init(index_meta, host_table, buffer_pool_manager_);
 
   // 2.2 insert the index info information into the indexes_
   indexes_.emplace(index_id, index_info);
+
+  // 3 write index metadata to index metadata page
+  auto index_meta_page_id = INVALID_PAGE_ID;
+  auto page = buffer_pool_manager_->NewPage(index_meta_page_id);
+  ASSERT(page != nullptr, "page allocation error.");
+  index_meta->SerializeTo(page->GetData());
+
+  // 4 write the catalog metadata to catalog metadata page
+  catalog_meta_->index_meta_pages_.emplace(index_id, index_meta_page_id);
+  ASSERT(DB_SUCCESS == FlushCatalogMetaPage(), "failed to flush catalog meta page.");
 
   return DB_SUCCESS;
 }

@@ -398,9 +398,8 @@ dberr_t CatalogManager::DropIndex(const string &table_name, const string &index_
  */
 dberr_t CatalogManager::FlushCatalogMetaPage() const {
   // ASSERT(false, "Not Implemented yet");
-  // buffer_pool_manager_->FetchPage(CATALOG_META_PAGE_ID);
-  // buffer_pool_manager_->UnpinPage(CATALOG_META_PAGE_ID, true);
   auto catalog_meta_page = buffer_pool_manager_->FetchPage(CATALOG_META_PAGE_ID);
+  memset(catalog_meta_page->GetData(), 0, PAGE_SIZE); // reset the data to 0, in order to get new data (information for index will change when inserting records)
   catalog_meta_->SerializeTo(catalog_meta_page->GetData());
   buffer_pool_manager_->UnpinPage(CATALOG_META_PAGE_ID, true);
   if (buffer_pool_manager_->FlushPage(CATALOG_META_PAGE_ID)) return DB_SUCCESS;

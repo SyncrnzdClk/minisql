@@ -15,7 +15,7 @@ public:
 class KeyManager {
  public: /**/
   [[nodiscard]] inline GenericKey *InitKey() const {
-    return (GenericKey *)malloc(key_size_);  // remember delete
+    return static_cast<GenericKey *>(malloc(key_size_));  // remember delete
   }
 
   inline void SerializeFromKey(GenericKey *key_buf, const Row &key, Schema *schema) const {

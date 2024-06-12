@@ -28,6 +28,7 @@ BufferPoolManager::~BufferPoolManager() {
  * TODO: Student Implement
  */
 Page *BufferPoolManager::FetchPage(page_id_t page_id, bool flag) {
+
   // 1.     Search the page table for the requested page (P).
   // 1.1    If P exists, pin it and return it immediately.
   // 1.2    If P does not exist, find a replacement page (R) from either the free list or the replacer.

@@ -55,7 +55,7 @@ bool TableHeap::UpdateTuple(Row &row, const RowId &rid, Txn *txn) {
 
   auto page = reinterpret_cast<TablePage *> (buffer_pool_manager_->FetchPage(rid.GetPageId())); // fetch the page that contains the row
   if (page == nullptr) return false; // if the buffer pool manager is full, return false
-  Row targetRow = Row(row);
+  Row targetRow = Row();
   targetRow.SetRowId(rid);
 
   int flag = page->UpdateTuple(row, &targetRow, schema_, txn, lock_manager_, log_manager_);
@@ -109,7 +109,7 @@ void TableHeap::RollbackDelete(const RowId &rid, Txn *txn) {
 /**
  * TODO: Student Implement
  */
-bool TableHeap::GetTuple(Row *row, Txn *txn) { 
+bool TableHeap::GetTuple(Row *row, Txn *txn) {
   auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(row->GetRowId().GetPageId()));
   if (page == nullptr) return false;
   if (page->GetTuple(row, schema_, txn, lock_manager_)) {
@@ -135,7 +135,7 @@ void TableHeap::DeleteTable(page_id_t page_id) {
  * TODO: Student Implement
  */
 TableIterator TableHeap::Begin(Txn *txn) {
-  if (first_page_id_ == INVALID_PAGE_ID) return TableIterator(nullptr, RowId(INVALID_ROWID), nullptr); // if there wasn't any page, just return a ending iterator
+  if (first_page_id_ == INVALID_PAGE_ID) return End(); // if there wasn't any page, just return a ending iterator
 
   auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(GetFirstPageId())); // get the first page of the tableheap
   RowId iteratorRowId;
@@ -145,7 +145,9 @@ TableIterator TableHeap::Begin(Txn *txn) {
     else return TableIterator(nullptr, RowId(INVALID_ROWID), nullptr); // reach the end of the table heap
   }
   buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
-  return TableIterator(this, iteratorRowId, txn); 
+  Row row(iteratorRowId);
+  GetTuple(&row, txn);
+  return TableIterator(this, row, txn);
 }
 
 /**

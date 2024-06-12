@@ -149,7 +149,6 @@ void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer
  *
  */
 void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool_manager) {
-  LOG(INFO) << "CUR NODE page id is = " << GetPageId();
   // get the start index of the page
   int start_index = GetSize();
 
@@ -161,7 +160,6 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
   for (int i = 0; i < size; i++) {
     auto page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(ValueAt(start_index+i))->GetData());
     page->SetParentPageId(GetPageId());
-    LOG(INFO) << "for page " << i << " paren page id = " << GetPageId();
     buffer_pool_manager->UnpinPage(page->GetPageId(), true);
   }
 

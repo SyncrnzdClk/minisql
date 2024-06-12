@@ -15,8 +15,8 @@ BPlusTree::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_manager
     : index_id_(index_id),
       buffer_pool_manager_(buffer_pool_manager),
       processor_(KM),
-      leaf_max_size_(PAGE_SIZE / (KM.GetKeySize() * 2)- 1),
-      internal_max_size_(PAGE_SIZE / (KM.GetKeySize() * 2)- 1) {
+      leaf_max_size_((PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / (KM.GetKeySize() + sizeof(RowId) )- 1),
+      internal_max_size_((PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (KM.GetKeySize() + sizeof(page_id_t) )- 1) {
         root_page_id_ = INVALID_PAGE_ID;
 }
 
@@ -106,7 +106,7 @@ bool BPlusTree::GetValue(const GenericKey *key, std::vector<RowId> &result, bool
 
     // if the leaf page is found
     flag = reinterpret_cast<BPlusTreeLeafPage *>(next_page->GetData())->Lookup(key, res, processor_);
-    result.push_back(res);
+    if (flag) result.push_back(res);
     buffer_pool_manager_->UnpinPage(next_id, false);
   }
   buffer_pool_manager_->UnpinPage(root_page_id_, false);
@@ -192,11 +192,9 @@ bool BPlusTree::InsertIntoLeaf(GenericKey *key, const RowId &value, Txn *transac
       buffer_pool_manager_->UnpinPage(split_page->GetPageId(), true);
       return true;
     }
-    buffer_pool_manager_->UnpinPage(bplus_leaf_to_be_inserted->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(leaf_to_be_inserted->GetPageId(), true);
     return true;
-
   }
-  
 }
 
 /*

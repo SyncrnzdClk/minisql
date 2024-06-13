@@ -34,10 +34,13 @@ void BPlusTree::Destroy(page_id_t current_page_id) {
     auto root_page = buffer_pool_manager_->FetchPage(root_page_id_);
     auto bplus_root_page = reinterpret_cast<BPlusTreePage *>(root_page->GetData());
 
+    // delete the index root in the index roots page
+    auto index_roots_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
+    index_roots_page->Delete(index_id_);
+
     if (bplus_root_page->IsLeafPage()) { // if there is only a root page, delete it and return
       buffer_pool_manager_->UnpinPage(root_page_id_, false);
       buffer_pool_manager_->DeletePage(root_page_id_);
-      return ;
     }
     else { // if there are more pages, recursively call this function
       auto bplus_internal_root_page = reinterpret_cast<BPlusTreeInternalPage *>(bplus_root_page);
@@ -46,7 +49,6 @@ void BPlusTree::Destroy(page_id_t current_page_id) {
       }
       buffer_pool_manager_->UnpinPage(root_page_id_, false);
       buffer_pool_manager_->DeletePage(root_page_id_);
-      return ;
     }
   }
   else {
@@ -54,7 +56,6 @@ void BPlusTree::Destroy(page_id_t current_page_id) {
     if (bplus_page->IsLeafPage()) { // if this is a leaf page, delete it and return
       buffer_pool_manager_->UnpinPage(current_page_id, false);
       buffer_pool_manager_->DeletePage(current_page_id);
-      return ;
     }
     else { // if this is an internal page, recursively call this function
       auto bplus_internal_page = reinterpret_cast<BPlusTreeInternalPage *>(bplus_page);
@@ -63,7 +64,6 @@ void BPlusTree::Destroy(page_id_t current_page_id) {
       }
       buffer_pool_manager_->UnpinPage(current_page_id, false);
       buffer_pool_manager_->DeletePage(current_page_id);
-      return ;
     }
   }
 }

@@ -19,6 +19,12 @@
 #include "planner/planner.h"
 #include "utils/utils.h"
 
+extern "C" {
+  int yyparse(void);
+#include "parser/minisql_lex.h"
+#include "parser/parser.h"
+}
+
 ExecuteEngine::ExecuteEngine() {
   char path[] = "./databases";
   DIR *dir;
@@ -429,18 +435,19 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
   // call catalog manager to create table
   dberr_t e = context->GetCatalog()->CreateTable(table_name, schema, context->GetTransaction(), table_info);
   if (e != DB_SUCCESS) {
+    cout << "create table error";
     return e;
   }
 
-  IndexInfo* index_info;
-
-  // create index for primary keys
-  if (!primary_key_cols.empty()) {
-    e = context->GetCatalog()->CreateIndex(table_name, table_name + "_pk_index", primary_key_cols, context->GetTransaction(), index_info, "bptree");
-  }
-  if (e != DB_SUCCESS) {
-    cout << "create index error" << endl;
-  }
+  // IndexInfo* index_info;
+  //
+  // // create index for primary keys
+  // if (!primary_key_cols.empty()) {
+  //   e = context->GetCatalog()->CreateIndex(table_name, table_name + "_pk_index", primary_key_cols, context->GetTransaction(), index_info, "bptree");
+  // }
+  // if (e != DB_SUCCESS) {
+  //   cout << "create index error" << endl;
+  // }
   return e;
 }
 
@@ -661,7 +668,43 @@ dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context)
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteExecfile" << std::endl;
 #endif
-  return DB_FAILED;
+  string file_name(ast->child_->val_);
+  ifstream file(file_name, ios::in);
+  // Read in the commands in the file into the vector.
+  int cnt = 0;
+  char ch;
+  const int buf_size = 1024;
+  char cmd[buf_size];
+  memset(cmd, 0, buf_size);
+  if (file.is_open()) {
+    while (file.get(ch)) {
+      // Judge if a whole command is gotten.
+      cmd[cnt++] = ch;
+      if (ch == ';') {
+        file.get(ch);  // Get the '\n' after ';'.
+
+        YY_BUFFER_STATE bp = yy_scan_string(cmd);
+        yy_switch_to_buffer(bp);
+        MinisqlParserInit();
+        yyparse();
+        auto result = Execute(MinisqlGetParserRootNode());
+        MinisqlParserFinish();
+        yy_delete_buffer(bp);
+        yylex_destroy();
+        ExecuteInformation(result);
+        if (result == DB_QUIT) {
+          break;
+        }
+        memset(cmd, 0, buf_size);
+        cnt = 0;
+      }
+    }
+    file.close();
+  }
+
+
+  // Process the commands one by one.
+  return DB_SUCCESS;
 }
 
 /**

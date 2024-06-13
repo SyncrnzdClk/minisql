@@ -20,7 +20,6 @@ TEST(BufferPoolManagerTest, BinaryDataTest) {
 
   page_id_t page_id_temp;
   auto *page0 = bpm->NewPage(page_id_temp);
-  LOG(INFO) << page_id_temp;
 
   // Scenario: The buffer pool is empty. We should be able to create a new page.
   ASSERT_NE(nullptr, page0);
@@ -60,7 +59,6 @@ TEST(BufferPoolManagerTest, BinaryDataTest) {
     EXPECT_EQ(buffer_pool_size + i, page_id_temp);
     EXPECT_EQ(true, bpm->UnpinPage(page_id_temp, false));
   }
-  cout << "here" << endl;
   // Scenario: We should be able to fetch the data we wrote a while ago.
   page0 = bpm->FetchPage(0, true);
   EXPECT_EQ(0, memcmp(page0->GetData(), random_binary_data, PAGE_SIZE));

@@ -38,6 +38,7 @@ void DiskManager::Close() {
 }
 
 void DiskManager::ReadPage(page_id_t logical_page_id, char *page_data) {
+  LOG(INFO) << "logical page id = " << logical_page_id;
   ASSERT(logical_page_id >= 0, "Invalid page id.");
   ReadPhysicalPage(MapPageId(logical_page_id), page_data);
 }

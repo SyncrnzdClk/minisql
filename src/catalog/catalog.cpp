@@ -102,7 +102,7 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
     }
 
     // set the data about the index
-    for (auto it = catalog_meta_->index_meta_pages_.begin(); it != catalog_meta_->index_meta_pages_.end(); it++) {
+    for (auto it = catalog_meta_->index_meta_pages_.begin(); it != catalog_meta_->index_meta_pages_.end(); ++it) {
       // fetch the page that contains the data about the index, and deserialize the data into index_meta
       auto indexPage = buffer_pool_manager->FetchPage(it->second);
       IndexInfo* index_info = IndexInfo::Create();
@@ -263,6 +263,17 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
   // 2.1 initialize the index info
   index_info = IndexInfo::Create();
   index_info->Init(index_meta, host_table, buffer_pool_manager_);
+
+  TableInfo* table_info = tables_.at(index_meta->GetTableId());
+  for (auto row = table_info->GetTableHeap()->Begin(nullptr); row != table_info->GetTableHeap()->End(); ++row) {
+    std::vector<Field> fields;
+    fields.reserve(keymap.size());
+    for (const auto i : keymap) {
+      fields.emplace_back(*(row->GetField(i)));
+    }
+    Row inserted_row(fields);
+    index_info->GetIndex()->InsertEntry(inserted_row, row->GetRowId(), nullptr);
+  }
 
   // 2.2 insert the index info information into the indexes_
   indexes_.emplace(index_id, index_info);

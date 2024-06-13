@@ -1,6 +1,4 @@
 #include "record/schema.h"
-#include "gtest/gtest.h"
-#include <vector>
 
 /**
  * TODO: Student Implement
@@ -36,7 +34,6 @@ uint32_t Schema::DeserializeFrom(char *buf, Schema *&schema) {
   uint32_t serializeSize = 0;
   uint32_t magicNum = 0;
   magicNum = MACH_READ_UINT32(buf + serializeSize);
-  EXPECT_EQ(magicNum, SCHEMA_MAGIC_NUM);
   serializeSize += sizeof(uint32_t);
 
   // deserialize the number of columns

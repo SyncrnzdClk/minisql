@@ -2,7 +2,6 @@
 
 #include "glog/logging.h"
 
-#include "gtest/gtest.h"
 Column::Column(std::string column_name, TypeId type, uint32_t index, bool nullable, bool unique)
     : name_(std::move(column_name)), type_(type), table_ind_(index), nullable_(nullable), unique_(unique) {
   ASSERT(type != TypeId::kTypeChar, "Wrong constructor for CHAR type.");
@@ -91,7 +90,6 @@ uint32_t Column::DeserializeFrom(char *buf, Column *&column) {
 
   uint32_t magicNum = MACH_READ_UINT32(buf);
   offset += sizeof(uint32_t);
-  EXPECT_EQ(magicNum, COLUMN_MAGIC_NUM);
   uint32_t nameLength = MACH_READ_UINT32(buf + offset);
   offset += sizeof(uint32_t);
 

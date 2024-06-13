@@ -76,15 +76,17 @@ class IndexInfo {
     key_schema_ = Schema::ShallowCopySchema(table_schema, keymap);
 
     index_ = CreateIndex(buffer_pool_manager, "bptree");
-    // TODO
     // should add the table info to the index
-    for (auto row = table_info->GetTableHeap()->Begin(nullptr); row != table_info->GetTableHeap()->End(); ++row) {
+   vector<RowId> res;
+   for (auto row = table_info->GetTableHeap()->Begin(nullptr); row != table_info->GetTableHeap()->End(); ++row) {
      std::vector<Field> fields;
      fields.reserve(keymap.size());
      for (const auto i : keymap) {
        fields.emplace_back(*(row->GetField(i)));
      }
      Row inserted_row(fields);
+     index_->ScanKey(inserted_row, res, nullptr);
+     if (!res.empty()) break;
      index_->InsertEntry(inserted_row, row->GetRowId(), nullptr);
     }
   }

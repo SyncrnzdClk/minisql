@@ -1,4 +1,7 @@
 #include "catalog/catalog.h"
+
+#include <page/index_roots_page.h>
+
 #include "common/macros.h"
 
 void CatalogMeta::SerializeTo(char *buf) const {
@@ -110,9 +113,9 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
       // initialize the index_info
       ASSERT(tables_.find(index_meta->GetTableId()) != tables_.end(), "the table does not exist");      
       TableInfo* table_info = tables_.find(index_meta->GetTableId())->second;
+
       index_info->Init(index_meta, table_info, buffer_pool_manager);
       buffer_pool_manager->UnpinPage(it->second, false);
-
       // set the map for indexes: table_name->index_name->indexes
       // first we check whether this index belongs to some table which is already in the map
       auto index_name_map_it = index_names_.find(table_info->GetTableName());

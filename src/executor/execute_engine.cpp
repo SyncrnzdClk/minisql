@@ -508,7 +508,6 @@ dberr_t ExecuteEngine::ExecuteShowIndexes(pSyntaxNode ast, ExecuteContext *conte
   // get the information about the tables
   vector<TableInfo*> table_infos;
   if (context->GetCatalog()->GetTables(table_infos) != DB_SUCCESS) {
-    cout << "Empty set (0.00 sec)" << endl;
     return DB_FAILED;
   }
 
@@ -518,7 +517,6 @@ dberr_t ExecuteEngine::ExecuteShowIndexes(pSyntaxNode ast, ExecuteContext *conte
     vector<IndexInfo *> index_infos;
     string table_name = table_info->GetTableName();
     if (context->GetCatalog()->GetTableIndexes(table_name, index_infos) != DB_SUCCESS) {
-      cout << "Empty set (0.00 sec)" << endl;
       return DB_FAILED;
     }
     table_index_map.emplace(table_name, index_infos);

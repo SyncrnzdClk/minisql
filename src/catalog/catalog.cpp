@@ -181,7 +181,7 @@ dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schem
   table_meta->SerializeTo(page->GetData());
   buffer_pool_manager_->UnpinPage(table_meta_page_id, true);
 
-  // write catalog metadata to catalog meatadata page
+  // write catalog metadata to catalog metadata page
   catalog_meta_->table_meta_pages_.emplace(table_id, table_meta_page_id);
   ASSERT(DB_SUCCESS == FlushCatalogMetaPage(), "failed to flush catalog meta page."); 
 
@@ -234,7 +234,7 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
   // check whether the table exist
   if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
   // check if the index already exist
-  std::unordered_map<std::string, index_id_t>& indexes_in_table = index_names_.at(table_name);
+  std::unordered_map<std::string, index_id_t>& indexes_in_table = index_names_[table_name];
   if (indexes_in_table.count(index_name) != 0) return DB_INDEX_ALREADY_EXIST;
 
   // initialize index info
@@ -389,7 +389,8 @@ dberr_t CatalogManager::DropIndex(const string &table_name, const string &index_
   if (table_names_.count(table_name) == 0) return DB_TABLE_NOT_EXIST;
   
   // check if the index exists
-  if (index_names_.count(index_name) == 0) return DB_INDEX_NOT_FOUND;
+  auto index_on_table = index_names_.at(table_name);
+  if (index_on_table.count(index_name) == 0) return DB_INDEX_NOT_FOUND;
 
   // find the index and delete it
   std::unordered_map<std::string, index_id_t>& index_in_table = index_names_.at(table_name);

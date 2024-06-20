@@ -66,7 +66,7 @@ void DestroySyntaxTree() {
   while (p != NULL) {
     pSyntaxNodeList next = p->next_;
     FreeSyntaxNode(p->node_);
-    free(p); // personal added
+    // free(p); // personal added
     p = next;
   }
   minisql_parser_syntax_node_list_ = NULL;

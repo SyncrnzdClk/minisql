@@ -35,7 +35,6 @@ class ExecutorTest : public ::testing::Test {
   /** Called before every executor test. */
   void SetUp() override {
     ::testing::Test::SetUp();
-
     // Initialize the database subsystems
     db_test_ = new DBStorageEngine("executor_test.db", true);
     auto &catalog_01 = db_test_->catalog_mgr_;

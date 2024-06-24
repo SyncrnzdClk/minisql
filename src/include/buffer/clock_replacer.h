@@ -1,34 +1,28 @@
-#ifndef MINISQL_CLOCK_REPLACER_H
-#define MINISQL_CLOCK_REPLACER_H
+#ifndef MINISQL_LRU_REPLACER_H
+#define MINISQL_LRU_REPLACER_H
 
-#include <algorithm>
-#include <list>
-#include <map>
-#include <mutex>
-#include <queue>
-#include <unordered_set>
 #include <vector>
-
+#include <mutex>
 #include "buffer/replacer.h"
 #include "common/config.h"
 
 using namespace std;
 
 /**
- * CLOCKReplacer implements the clock replacement.
+ * ClockReplacer implements the Clock replacement policy.
  */
-class CLOCKReplacer : public Replacer {
- public:
+class ClockReplacer : public Replacer {
+public:
   /**
-   * Create a new CLOCKReplacer.
-   * @param num_pages the maximum number of pages the CLOCKReplacer will be required to store
+   * Create a new ClockReplacer.
+   * @param num_pages the maximum number of pages the ClockReplacer will be required to store
    */
-  explicit CLOCKReplacer(size_t num_pages);
+  explicit ClockReplacer(size_t num_pages);
 
   /**
-   * Destroys the CLOCKReplacer.
+   * Destroys the ClockReplacer.
    */
-  ~CLOCKReplacer() override;
+  ~ClockReplacer() override;
 
   bool Victim(frame_id_t *frame_id) override;
 
@@ -38,10 +32,13 @@ class CLOCKReplacer : public Replacer {
 
   size_t Size() override;
 
- private:
-  size_t capacity;
-  list<frame_id_t> clock_list;               // replacer中可以被替换的数据页
-  map<frame_id_t, frame_id_t> clock_status;  // 数据页的存储状态
+  size_t TotalSize() override;
+
+private:
+  size_t num_pages_; // Maximum number of pages
+  vector<bool> reference_bits_; // Reference bits for clock algorithm
+  vector<frame_id_t> frames_; // Frame ids stored in the replacer
+  size_t hand_; // Current position of the clock hand
 };
 
-#endif  // MINISQL_CLOCK_REPLACER_H
+#endif  // MINISQL_LRU_REPLACER_H

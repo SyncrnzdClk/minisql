@@ -439,15 +439,6 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
     return e;
   }
 
-  // IndexInfo* index_info;
-  //
-  // // create index for primary keys
-  // if (!primary_key_cols.empty()) {
-  //   e = context->GetCatalog()->CreateIndex(table_name, table_name + "_pk_index", primary_key_cols, context->GetTransaction(), index_info, "bptree");
-  // }
-  // if (e != DB_SUCCESS) {
-  //   cout << "create index error" << endl;
-  // }
   return e;
 }
 
@@ -624,11 +615,11 @@ dberr_t ExecuteEngine::ExecuteDropIndex(pSyntaxNode ast, ExecuteContext *context
     if (context->GetCatalog()->GetIndex(table_info->GetTableName(), index_name, index_info) == DB_SUCCESS) { // if successfully find the index, drop it
       dberr_t e = context->GetCatalog()->DropIndex(table_info->GetTableName(), index_name);
       if (e == DB_SUCCESS) {
-        cout << "successfully drop the index.";
+        cout << "successfully drop the index." << endl;
         return DB_SUCCESS;
       }
       else {
-        cout << "drop index error.";
+        cout << "drop index error." << endl;
         return e;
       }
     }
